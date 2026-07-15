@@ -32,7 +32,14 @@ export default defineConfig({
 			preprocess: [
 				mdsvex({ extensions: ['.svx', '.md'], smartypants: true }),
 			],
-			extensions: ['.svelte', '.svx', '.md']
+			extensions: ['.svelte', '.svx', '.md'],
+			typescript: {
+				config(config) {
+					if (config.include) {
+						config.include.push('src/global.d.ts')
+					}
+				}
+			}
 		})
 	]
 });
