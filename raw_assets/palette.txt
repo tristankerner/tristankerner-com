@@ -1,0 +1,95 @@
+/* Deep Sea - https://coolors.co/13293d-006494-247ba0-1b98e0-e8f1f2 */
+
+- CSV
+
+13293d,006494,247ba0,1b98e0,e8f1f2
+
+- With #
+
+#13293d, #006494, #247ba0, #1b98e0, #e8f1f2
+
+- Array
+
+["13293d","006494","247ba0","1b98e0","e8f1f2"]
+
+- Object
+
+{"Deep Space Blue":"13293d","Baltic Blue":"006494","Cerulean":"247ba0","Blue Bell":"1b98e0","Alice Blue":"e8f1f2"}
+
+- Extended Array
+
+[{"name":"Deep Space Blue","hex":"13293d","rgb":[19,41,61],"cmyk":[69,33,0,76],"hsb":[209,69,24],"hsl":[209,53,16],"lab":[16,-1,-15]},{"name":"Baltic Blue","hex":"006494","rgb":[0,100,148],"cmyk":[100,32,0,42],"hsb":[199,100,58],"hsl":[199,100,29],"lab":[40,-6,-33]},{"name":"Cerulean","hex":"247ba0","rgb":[36,123,160],"cmyk":[78,23,0,37],"hsb":[198,78,63],"hsl":[198,63,38],"lab":[48,-12,-27]},{"name":"Blue Bell","hex":"1b98e0","rgb":[27,152,224],"cmyk":[88,32,0,12],"hsb":[202,88,88],"hsl":[202,78,49],"lab":[60,-6,-45]},{"name":"Alice Blue","hex":"e8f1f2","rgb":[232,241,242],"cmyk":[4,0,0,5],"hsb":[186,4,95],"hsl":[186,28,93],"lab":[95,-3,-2]}]
+
+- XML
+
+<palette>
+  <color name="Deep Space Blue" hex="13293d" r="19" g="41" b="61" />
+  <color name="Baltic Blue" hex="006494" r="0" g="100" b="148" />
+  <color name="Cerulean" hex="247ba0" r="36" g="123" b="160" />
+  <color name="Blue Bell" hex="1b98e0" r="27" g="152" b="224" />
+  <color name="Alice Blue" hex="e8f1f2" r="232" g="241" b="242" />
+</palette>
+
+
+tailwind:
+
+--color-deep-space-blue-50: #ebf2f9;
+--color-deep-space-blue-100: #d8e6f3;
+--color-deep-space-blue-200: #b1cde7;
+--color-deep-space-blue-300: #8ab4db;
+--color-deep-space-blue-400: #639bcf;
+--color-deep-space-blue-500: #3c82c3;
+--color-deep-space-blue-600: #30689c;
+--color-deep-space-blue-700: #244e75;
+--color-deep-space-blue-800: #18344e;
+--color-deep-space-blue-900: #0c1a27;
+--color-deep-space-blue-950: #08121b;
+
+--color-baltic-blue-50: #e5f7ff;
+--color-baltic-blue-100: #ccefff;
+--color-baltic-blue-200: #99dfff;
+--color-baltic-blue-300: #66cfff;
+--color-baltic-blue-400: #33beff;
+--color-baltic-blue-500: #00aeff;
+--color-baltic-blue-600: #008bcc;
+--color-baltic-blue-700: #006999;
+--color-baltic-blue-800: #004666;
+--color-baltic-blue-900: #002333;
+--color-baltic-blue-950: #001824;
+
+--color-cerulean-50: #eaf5fa;
+--color-cerulean-100: #d5ecf6;
+--color-cerulean-200: #acd9ec;
+--color-cerulean-300: #82c6e3;
+--color-cerulean-400: #59b3d9;
+--color-cerulean-500: #2fa0d0;
+--color-cerulean-600: #2680a6;
+--color-cerulean-700: #1c607d;
+--color-cerulean-800: #134053;
+--color-cerulean-900: #09202a;
+--color-cerulean-950: #07161d;
+
+--color-blue-bell-50: #e8f5fc;
+--color-blue-bell-100: #d2ebf9;
+--color-blue-bell-200: #a4d7f4;
+--color-blue-bell-300: #77c2ee;
+--color-blue-bell-400: #49aee9;
+--color-blue-bell-500: #1c9ae3;
+--color-blue-bell-600: #167bb6;
+--color-blue-bell-700: #115c88;
+--color-blue-bell-800: #0b3e5b;
+--color-blue-bell-900: #061f2d;
+--color-blue-bell-950: #041620;
+
+--color-alice-blue-50: #eff5f6;
+--color-alice-blue-100: #deebed;
+--color-alice-blue-200: #bed7da;
+--color-alice-blue-300: #9dc4c8;
+--color-alice-blue-400: #7cb0b6;
+--color-alice-blue-500: #5c9ca3;
+--color-alice-blue-600: #497d83;
+--color-alice-blue-700: #375e62;
+--color-alice-blue-800: #253e41;
+--color-alice-blue-900: #121f21;
+--color-alice-blue-950: #0d1617;
+
