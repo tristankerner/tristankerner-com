@@ -1,0 +1,11 @@
+services:
+  nginx:
+    image: nginx:stable-alpine
+    container_name: nginx_web_server
+    restart: no
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+       - ./nginx_default.conf:/etc/nginx/conf.d/default.conf:ro
+       - ./build:/var/www/tristankerner.com/frontend/build:ro
