@@ -1,11 +1,19 @@
 <script lang="ts">
-    import {themeState} from "./state.svelte.ts";
+    import { page } from "$app/state";
+    import {themeState, counterState} from "./state.svelte.ts";
     import type {SingleDigit} from "./assets/DigitalDigitSvg/types.ts";
     interface Props {
         class?: string;
-        count: number;
     }
-    let { class: className, count }: Props = $props();
+    let { class: className }: Props = $props();
+
+    const homeCount = $derived(
+        counterState.pageCounts.find((p) => p.path === '/')?.total_unique_visitors ?? 0
+    );
+    const count = $derived(
+        counterState.pageCounts.find((p) => p.path === page.url.pathname)?.total_unique_visitors
+            ?? homeCount
+    );
     let countStr = $derived([... count.toString()]) as SingleDigit[];
     import DigitalDigitSvg from "$lib/assets/DigitalDigitSvg/DigitalDigitSvg.svelte";
 </script>

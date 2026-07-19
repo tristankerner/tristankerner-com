@@ -1,5 +1,6 @@
 <script lang="ts">
     import {themeState} from "../lib/state.svelte.ts";
+    import { connectCounterSocket } from "../lib/counterSocket.ts";
     import { onMount } from 'svelte';
     import { page } from "$app/state";
 	import './layout.css';
@@ -18,6 +19,8 @@
     };
 
     onMount(() => {
+        connectCounterSocket();
+
         // https://github.com/themesberg/flowbite-svelte/discussions/1274
         updateTheme();
         const darkModeObserver = new MutationObserver((mutations) => {
@@ -58,7 +61,7 @@
 </div>
 <main class="min-h-screen bg-gray-50 p-4 dark:bg-gray-900">
     <div class="flex float-right items-center justify-center">
-        <Counter count={712}></Counter>
+        <Counter></Counter>
     </div>
 
     {@render children()}

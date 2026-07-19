@@ -5,6 +5,16 @@ import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  server: {
+    // In production this is served by the same actix-web origin as the rest of the
+    // site; proxy it here so `vite dev` can talk to a locally running backend too.
+    proxy: {
+      "/ws-counter": {
+        target: "http://127.0.0.1:8080",
+        ws: true,
+      },
+    },
+  },
   plugins: [
     tailwindcss(),
     sveltekit({
