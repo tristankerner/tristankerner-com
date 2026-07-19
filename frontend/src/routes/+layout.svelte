@@ -1,13 +1,36 @@
 <script lang="ts">
+    import {themeState} from "../lib/state.svelte.ts";
+    import { onMount } from 'svelte';
     import { page } from "$app/state";
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
     import logo from '$lib/assets/logo.svg';
     import logo_inverted from '$lib/assets/logo-inverted.svg';
-	let { children } = $props();
+    import Counter from "$lib/Counter.svelte";
     import { Navbar, NavBrand, NavLi, NavUl, NavHamburger,  DarkMode, Footer, FooterCopyright, FooterLinkGroup, FooterLink } from "flowbite-svelte";
     import { LinkedinSolid,  GithubSolid } from "flowbite-svelte-icons";
+
+    let { children } = $props();
     let activeUrl = $derived(page.url.pathname);
+
+    const updateTheme = () => {
+        themeState.darkMode = document.documentElement.classList.contains('dark');
+    };
+
+    onMount(() => {
+        // https://github.com/themesberg/flowbite-svelte/discussions/1274
+        updateTheme();
+        const darkModeObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'class') {
+                    updateTheme();
+                }
+            });
+        });
+        darkModeObserver.observe(document.documentElement, {
+            attributes: true,
+        });
+    });
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
@@ -34,14 +57,18 @@
     </Navbar>
 </div>
 <main class="min-h-screen bg-gray-50 p-4 dark:bg-gray-900">
-{@render children()}
-    <Footer>
-        <FooterCopyright href="https://www.linkedin.com/in/tristan-kerner-754343135" by="Tristan Kerner™" year={2026} />
-        <FooterLinkGroup class="mt-3 flex flex-wrap items-center text-sm text-gray-500 sm:mt-0 dark:text-gray-400">
-            <FooterLink href="https://www.linkedin.com/in/tristan-kerner-754343135"><LinkedinSolid size="lg"/></FooterLink>
-            <FooterLink href="https://github.com/tristankerner"><GithubSolid size="lg"/></FooterLink>
-        </FooterLinkGroup>
-    </Footer>
+    <div class="flex float-right items-center justify-center">
+        <Counter count={712}></Counter>
+    </div>
+
+    {@render children()}
 </main>
+<Footer>
+    <FooterCopyright href="https://www.linkedin.com/in/tristan-kerner-754343135" by="Tristan Kerner™" year={2026} />
+    <FooterLinkGroup class="mt-3 flex flex-wrap items-center text-sm text-gray-500 sm:mt-0 dark:text-gray-400">
+        <FooterLink href="https://www.linkedin.com/in/tristan-kerner-754343135"><LinkedinSolid size="lg"/></FooterLink>
+        <FooterLink href="https://github.com/tristankerner"><GithubSolid size="lg"/></FooterLink>
+    </FooterLinkGroup>
+</Footer>
 
 
