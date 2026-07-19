@@ -1,7 +1,9 @@
 <script lang="ts">
     import { page } from "$app/state";
+    import { fly } from "svelte/transition";
     import {themeState, counterState} from "./state.svelte.ts";
     import type {SingleDigit} from "./assets/DigitalDigitSvg/types.ts";
+    import DigitalDigitSvg from "$lib/assets/DigitalDigitSvg/DigitalDigitSvg.svelte";
     interface Props {
         class?: string;
     }
@@ -15,19 +17,28 @@
             ?? homeCount
     );
     let countStr = $derived([... count.toString()]) as SingleDigit[];
-    import DigitalDigitSvg from "$lib/assets/DigitalDigitSvg/DigitalDigitSvg.svelte";
 </script>
 <div class="{className}">
     <div class="flex gap-1/2" aria-label="counter">
-    {#each [...countStr] as char}
-        <DigitalDigitSvg
-                digit={char}
-                class="h-6 w-6 md:h-10 md:w-10"
-                strokeWidth={48}
-                bgColor={themeState.darkMode === true ? '#000000' : '#FFFFFF'}
-                textColor={themeState.darkMode === true ? '#FFFFFF' : '#000000'}
-        >
-        </DigitalDigitSvg>
+    {#each countStr as digit, i (i)}
+        <div class="relative h-6 w-6 overflow-hidden md:h-10 md:w-10">
+            {#key digit}
+                <div
+                        class="absolute inset-0"
+                        in:fly={{ y: '100%', duration: 350 }}
+                        out:fly={{ y: '-100%', duration: 350 }}
+                >
+                    <DigitalDigitSvg
+                            digit={digit}
+                            class="h-full w-full"
+                            strokeWidth={48}
+                            bgColor={themeState.darkMode === true ? '#000000' : '#FFFFFF'}
+                            textColor={themeState.darkMode === true ? '#FFFFFF' : '#000000'}
+                    >
+                    </DigitalDigitSvg>
+                </div>
+            {/key}
+        </div>
     {/each}
     </div>
 </div>
