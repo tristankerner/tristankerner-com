@@ -67,7 +67,7 @@ function svelteTemplate(title: string, author: string): string {
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
-    args: Bun.argv.slice(2),
+    args: process.argv.slice(2),
     options: {
       title: { type: "string" },
       author: { type: "string" },
