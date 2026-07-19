@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 @source "../../node_modules/flowbite-svelte/dist";
 @source "../../node_modules/flowbite-svelte-icons/dist";
 
@@ -8,91 +8,88 @@
 @custom-variant dark (&:where(.dark, .dark *));
 /* ... */
 
-
 @theme {
-    /* Deep Sea palette - https://coolors.co/13293d-006494-247ba0-1b98e0-e8f1f2 */
+  /* Deep Sea palette - https://coolors.co/13293d-006494-247ba0-1b98e0-e8f1f2 */
 
-    /* primary: Cerulean - brand/action color, works as accent in both light and dark mode */
-    --color-primary-50: #eaf5fa;
-    --color-primary-100: #d5ecf6;
-    --color-primary-200: #acd9ec;
-    --color-primary-300: #82c6e3;
-    --color-primary-400: #59b3d9;
-    --color-primary-500: #2fa0d0;
-    --color-primary-600: #2680a6;
-    --color-primary-700: #1c607d;
-    --color-primary-800: #134053;
-    --color-primary-900: #09202a;
-    --color-primary-950: #07161d;
+  /* primary: Cerulean - brand/action color, works as accent in both light and dark mode */
+  --color-primary-50: #eaf5fa;
+  --color-primary-100: #d5ecf6;
+  --color-primary-200: #acd9ec;
+  --color-primary-300: #82c6e3;
+  --color-primary-400: #59b3d9;
+  --color-primary-500: #2fa0d0;
+  --color-primary-600: #2680a6;
+  --color-primary-700: #1c607d;
+  --color-primary-800: #134053;
+  --color-primary-900: #09202a;
+  --color-primary-950: #07161d;
 
-    /* secondary: Blue Bell - brighter accent for highlights/CTAs */
-    --color-secondary-50: #e8f5fc;
-    --color-secondary-100: #d2ebf9;
-    --color-secondary-200: #a4d7f4;
-    --color-secondary-300: #77c2ee;
-    --color-secondary-400: #49aee9;
-    --color-secondary-500: #1c9ae3;
-    --color-secondary-600: #167bb6;
-    --color-secondary-700: #115c88;
-    --color-secondary-800: #0b3e5b;
-    --color-secondary-900: #061f2d;
-    --color-secondary-950: #041620;
+  /* secondary: Blue Bell - brighter accent for highlights/CTAs */
+  --color-secondary-50: #e8f5fc;
+  --color-secondary-100: #d2ebf9;
+  --color-secondary-200: #a4d7f4;
+  --color-secondary-300: #77c2ee;
+  --color-secondary-400: #49aee9;
+  --color-secondary-500: #1c9ae3;
+  --color-secondary-600: #167bb6;
+  --color-secondary-700: #115c88;
+  --color-secondary-800: #0b3e5b;
+  --color-secondary-900: #061f2d;
+  --color-secondary-950: #041620;
 
-    /* full named palette scales, available for direct use (e.g. bg-alice-blue-50) */
-    --color-deep-space-blue-50: #ebf2f9;
-    --color-deep-space-blue-100: #d8e6f3;
-    --color-deep-space-blue-200: #b1cde7;
-    --color-deep-space-blue-300: #8ab4db;
-    --color-deep-space-blue-400: #639bcf;
-    --color-deep-space-blue-500: #3c82c3;
-    --color-deep-space-blue-600: #30689c;
-    --color-deep-space-blue-700: #244e75;
-    --color-deep-space-blue-800: #18344e;
-    --color-deep-space-blue-900: #0c1a27;
-    --color-deep-space-blue-950: #08121b;
+  /* full named palette scales, available for direct use (e.g. bg-alice-blue-50) */
+  --color-deep-space-blue-50: #ebf2f9;
+  --color-deep-space-blue-100: #d8e6f3;
+  --color-deep-space-blue-200: #b1cde7;
+  --color-deep-space-blue-300: #8ab4db;
+  --color-deep-space-blue-400: #639bcf;
+  --color-deep-space-blue-500: #3c82c3;
+  --color-deep-space-blue-600: #30689c;
+  --color-deep-space-blue-700: #244e75;
+  --color-deep-space-blue-800: #18344e;
+  --color-deep-space-blue-900: #0c1a27;
+  --color-deep-space-blue-950: #08121b;
 
-    --color-baltic-blue-50: #e5f7ff;
-    --color-baltic-blue-100: #ccefff;
-    --color-baltic-blue-200: #99dfff;
-    --color-baltic-blue-300: #66cfff;
-    --color-baltic-blue-400: #33beff;
-    --color-baltic-blue-500: #00aeff;
-    --color-baltic-blue-600: #008bcc;
-    --color-baltic-blue-700: #006999;
-    --color-baltic-blue-800: #004666;
-    --color-baltic-blue-900: #002333;
-    --color-baltic-blue-950: #001824;
+  --color-baltic-blue-50: #e5f7ff;
+  --color-baltic-blue-100: #ccefff;
+  --color-baltic-blue-200: #99dfff;
+  --color-baltic-blue-300: #66cfff;
+  --color-baltic-blue-400: #33beff;
+  --color-baltic-blue-500: #00aeff;
+  --color-baltic-blue-600: #008bcc;
+  --color-baltic-blue-700: #006999;
+  --color-baltic-blue-800: #004666;
+  --color-baltic-blue-900: #002333;
+  --color-baltic-blue-950: #001824;
 
-    --color-alice-blue-50: #eff5f6;
-    --color-alice-blue-100: #deebed;
-    --color-alice-blue-200: #bed7da;
-    --color-alice-blue-300: #9dc4c8;
-    --color-alice-blue-400: #7cb0b6;
-    --color-alice-blue-500: #5c9ca3;
-    --color-alice-blue-600: #497d83;
-    --color-alice-blue-700: #375e62;
-    --color-alice-blue-800: #253e41;
-    --color-alice-blue-900: #121f21;
-    --color-alice-blue-950: #0d1617;
+  --color-alice-blue-50: #eff5f6;
+  --color-alice-blue-100: #deebed;
+  --color-alice-blue-200: #bed7da;
+  --color-alice-blue-300: #9dc4c8;
+  --color-alice-blue-400: #7cb0b6;
+  --color-alice-blue-500: #5c9ca3;
+  --color-alice-blue-600: #497d83;
+  --color-alice-blue-700: #375e62;
+  --color-alice-blue-800: #253e41;
+  --color-alice-blue-900: #121f21;
+  --color-alice-blue-950: #0d1617;
 
-    /*
+  /*
      * Override Tailwind's default gray scale with a navy tint derived from
      * Deep Space Blue / Alice Blue. The app's dark mode surfaces and borders
      * (dark:bg-gray-800/900, text-gray-400/500, dark:border-gray-600/800)
      * pick this up automatically, so dark mode reads as "Deep Sea" instead
      * of neutral gray while light mode stays on plain white.
      */
-    --color-gray-50: #f1f5f7;
-    --color-gray-100: #e3eaed;
-    --color-gray-200: #c7d5da;
-    --color-gray-300: #a3b9c1;
-    --color-gray-400: #7a97a3;
-    --color-gray-500: #567585;
-    --color-gray-600: #3f5c6c;
-    --color-gray-700: #2c4454;
-    --color-gray-800: #1c2f3d;
-    --color-gray-900: #13293d;
-    --color-gray-950: #0b1a28;
-
-
+  --color-gray-50: #f1f5f7;
+  --color-gray-100: #e3eaed;
+  --color-gray-200: #c7d5da;
+  --color-gray-300: #a3b9c1;
+  --color-gray-400: #7a97a3;
+  --color-gray-500: #567585;
+  --color-gray-600: #3f5c6c;
+  --color-gray-700: #2c4454;
+  --color-gray-800: #1c2f3d;
+  --color-gray-900: #13293d;
+  --color-gray-950: #0b1a28;
 }
