@@ -3,8 +3,11 @@ use actix_web::{rt, web, App, Error, HttpRequest, HttpResponse, HttpServer, Resu
 use actix_ws::AggregatedMessage;
 use futures_util::StreamExt as _;
 use serde::Serialize;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tokio::sync::watch;
+
+const BUILD_DIR: &str = "./frontend/build";
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -26,9 +29,37 @@ fn counters_json(counters: &[PathVisitorCount]) -> String {
     serde_json::to_string(counters).unwrap()
 }
 
-async fn index() -> Result<NamedFile> {
-    // Serves the entry point of your Svelte SPA
-    Ok(NamedFile::open("./frontend/build/index.html")?)
+// SvelteKit (adapter-static, prerender = true) emits one static HTML file per
+// route (e.g. `/about-me` -> `about-me.html`), not just a single SPA shell. Maps
+// a request path to its prerendered file within `BUILD_DIR`, rejecting `.`/`..`
+// segments so the request path can never escape the build directory.
+fn prerendered_html_path(request_path: &str) -> Option<PathBuf> {
+    let trimmed = request_path.trim_matches('/');
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut candidate = PathBuf::from(BUILD_DIR);
+    for segment in trimmed.split('/') {
+        if segment.is_empty() || segment == "." || segment == ".." {
+            return None;
+        }
+        candidate.push(segment);
+    }
+    candidate.set_extension("html");
+    Some(candidate)
+}
+
+async fn spa_fallback(req: HttpRequest) -> Result<NamedFile> {
+    if let Some(path) = prerendered_html_path(req.path()) {
+        if path.is_file() {
+            return Ok(NamedFile::open(path)?);
+        }
+    }
+
+    // No prerendered page for this path (e.g. a genuinely unknown route): fall
+    // back to the SPA shell so client-side routing can take over.
+    Ok(NamedFile::open(Path::new(BUILD_DIR).join("index.html"))?)
 }
 
 async fn ws_counter(
@@ -152,11 +183,10 @@ async fn main() -> std::io::Result<()> {
             .service(web::scope("/api"))
             .route("/ws-counter", web::get().to(ws_counter))
             // 2. Serve static assets (JS, CSS, Images) from the build folder
-            .service(Files::new("/", "./frontend/build")
+            .service(Files::new("/", BUILD_DIR)
                          .index_file("index.html")
-                         .default_handler(web::route().to(index))
+                         .default_handler(web::route().to(spa_fallback))
                      // TODO: try_compressed() should be available for next release?
-                     // Handles Svelte client routing fixes
             )
     })
         .bind(("127.0.0.1", 8080))?
