@@ -10,4 +10,13 @@ actix-ws = "0.4.0"
 futures-util = "0.3.33"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.150"
-tokio = { version = "1.53.0", features = ["macros"] }
+# Already compiled as part of actix-files; used directly so precompressed
+# variants keep the content type of the file they stand in for.
+mime_guess = "2"
+tokio = { version = "1.53.0", features = ["macros", "sync"] }
+
+# Slower compile, but a smaller and faster binary for the resource-limited VPS.
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
