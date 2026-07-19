@@ -37,7 +37,23 @@ export default defineConfig({
         strict: true,
       }),
       output: {
-        bundleStrategy: "inline", // or 'inline'
+        // 'split' keeps each route (and each lazily imported blog post) in its
+        // own hashed chunk under /_app/immutable/, which the actix server
+        // already serves with long-lived immutable cache headers. 'inline'
+        // duplicated the entire app bundle into every prerendered HTML page.
+        bundleStrategy: "split",
+      },
+      prerender: {
+        // /blog/page/[page] legitimately has zero prerendered instances once
+        // there are POSTS_PER_PAGE or fewer posts (page 1 lives at /blog
+        // itself) - only that route is allowed to go unseen, everything else
+        // still fails the build as before.
+        handleUnseenRoutes: (details) => {
+          const unexpected = details.routes.filter((id) => id !== "/blog/page/[page]");
+          if (unexpected.length > 0) {
+            throw new Error(`Unseen prerenderable routes: ${unexpected.join(", ")}`);
+          }
+        },
       },
       preprocess: [mdsvex({ extensions: [".svx", ".md"], smartypants: true })],
       extensions: [".svelte", ".svx", ".md"],

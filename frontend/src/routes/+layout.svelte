@@ -52,6 +52,7 @@
         </div>
         <NavUl activeUrl={activeUrl}>
             <NavLi href="/">Home</NavLi>
+            <NavLi href="/blog">Blog</NavLi>
             <NavLi href="/memory-lane">Memory Ln</NavLi>
             <NavLi href="https://www.linkedin.com/in/tristan-kerner-754343135" target="_blank">LinkedIn</NavLi>
             <NavLi href="https://github.com/tristankerner" target="_blank">GitHub</NavLi>
