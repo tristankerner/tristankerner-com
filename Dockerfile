@@ -16,7 +16,12 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs \
 COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
-FROM debian:bookworm-slim
+# Distroless: no shell, package manager, or other OS tooling - just glibc +
+# libgcc (this binary's only two dynamic deps, confirmed via ldd) to run it
+# alongside the static frontend build. Root, not :nonroot, since
+# deploy/run.sh binds this container to 80/443 directly, which needs
+# CAP_NET_BIND_SERVICE that uid 65532 wouldn't have.
+FROM gcr.io/distroless/cc-debian12
 WORKDIR /app
 COPY --from=server-builder /app/target/release/tristankerner-com ./tristankerner-com
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
