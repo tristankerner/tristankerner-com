@@ -5,39 +5,46 @@
 # so this is the "docker-compose up -d" equivalent as a plain script - just
 # `docker run` calls sharing a filesystem volume, no compose file needed.
 #
-# Re-running this script is safe: it recreates both containers and skips
-# certificate issuance if a cert already exists (renewal is handled by the
-# long-running certbot-renew container below, not by this script).
+# All configuration comes from environment variables (defaults below, hard
+# requirements checked below that) rather than constants in this file, so
+# .github/workflows/deploy.yml can drive it entirely from GitHub Actions
+# variables/secrets without editing this script. Run by hand the same way:
+#   DOMAIN=... LETSENCRYPT_EMAIL=... CLOUDFLARE_API_TOKEN=... ./deploy/run.sh
+#
+# Re-running this script is safe: it stops+recreates the app container (and
+# the certbot-renew sidecar) in place, but never deletes or modifies an
+# already-issued certificate under $STATE_DIR, and skips issuance entirely
+# if one already exists (renewal is handled by the long-running
+# certbot-renew container below, not by this script).
 set -euo pipefail
 
-# --- Configuration -----------------------------------------------------
-DOMAIN="tristankerner.com"
-LETSENCRYPT_EMAIL="REPLACE_ME_WITH_YOUR_EMAIL@example.com"
+# --- Configuration -------------------------------------------------------
+: "${STATE_DIR:=/var/lib/tristankerner}"
+: "${IMAGE_NAME:=tristankerner-com}"
+: "${IMAGE_TAR:=/tmp/tristankerner-com-image.tar.gz}"
+: "${CONTAINER_NAME:=tristankerner-com}"
+: "${HTTP_PORT:=80}"
+: "${HTTPS_PORT:=443}"
+: "${CONTAINER_PORT:=80}"
+: "${CONTAINER_TLS_PORT:=443}"
 
-# Cloudflare API token, scoped to Zone:DNS:Edit for this zone only
-# (My Profile -> API Tokens -> Create Token -> "Edit zone DNS" template).
-CLOUDFLARE_API_TOKEN="REPLACE_ME_WITH_CLOUDFLARE_API_TOKEN"
-
-# Where the app image is pulled from, e.g. a GCP Artifact Registry repo:
-#   us-docker.pkg.dev/PROJECT_ID/REPO/tristankerner-com:latest
-# If pulling from Artifact Registry/GCR, the VM's service account needs
-# Artifact Registry Reader, and `docker-credential-gcr configure-docker`
-# (already set up on COS images that include the GCR credential helper).
-APP_IMAGE="REPLACE_ME_WITH_APP_IMAGE_REF"
-
-# COS's root filesystem is read-only; /var is the persistent, writable
-# partition, so all state lives under it.
-STATE_DIR="/var/lib/tristankerner"
-CERT_DIR="$STATE_DIR/letsencrypt"
-CLOUDFLARE_INI="$STATE_DIR/cloudflare.ini"
-# ------------------------------------------------------------------------
-
-for placeholder in "$LETSENCRYPT_EMAIL" "$CLOUDFLARE_API_TOKEN" "$APP_IMAGE"; do
-  if [[ "$placeholder" == REPLACE_ME* ]]; then
-    echo "error: edit the placeholders at the top of $0 before running it" >&2
+# DOMAIN, LETSENCRYPT_EMAIL: certbot's `-d`/`--email` for the cert.
+# CLOUDFLARE_API_TOKEN: Cloudflare API Token (not the legacy Global API Key)
+# scoped to "Zone:DNS:Edit" for this zone only (My Profile -> API Tokens ->
+# Create Token -> "Edit zone DNS" template). Used by certbot's
+# dns-cloudflare plugin for the DNS-01 challenge below.
+for required in DOMAIN LETSENCRYPT_EMAIL CLOUDFLARE_API_TOKEN; do
+  if [ -z "${!required:-}" ]; then
+    echo "error: \$$required must be set" >&2
     exit 1
   fi
 done
+
+# COS's root filesystem is read-only; /var is the persistent, writable
+# partition, so all state lives under it.
+CERT_DIR="$STATE_DIR/letsencrypt"
+CLOUDFLARE_INI="$STATE_DIR/cloudflare.ini"
+# --------------------------------------------------------------------------
 
 mkdir -p "$CERT_DIR"
 
@@ -48,6 +55,15 @@ umask 077
 cat >"$CLOUDFLARE_INI" <<EOF
 dns_cloudflare_api_token = $CLOUDFLARE_API_TOKEN
 EOF
+
+# --- Load the freshly built app image -----------------------------------
+# No container registry involved: the image is built in CI and shipped here
+# as a plain tarball (see .github/workflows/deploy.yml).
+if [ ! -f "$IMAGE_TAR" ]; then
+  echo "error: image tarball not found at $IMAGE_TAR" >&2
+  exit 1
+fi
+docker load -i "$IMAGE_TAR"
 
 # --- Issue the initial certificate (skipped if one already exists) -----
 if [ ! -f "$CERT_DIR/live/$DOMAIN/fullchain.pem" ]; then
@@ -85,15 +101,29 @@ docker run -d \
   -c 'trap exit TERM; while :; do certbot renew --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt-cloudflare.ini --dns-cloudflare-propagation-seconds 30 --non-interactive; sleep 12h & wait $!; done'
 
 # --- App container -------------------------------------------------------
-docker pull "$APP_IMAGE"
-docker rm -f tristankerner-com >/dev/null 2>&1 || true
+# Stops+removes whatever was previously running under this name before
+# starting the new image - an in-place update, not a fresh install - and
+# never touches $CERT_DIR, so already-issued certificates survive redeploys.
+# HOST is deliberately not configurable: it must stay 0.0.0.0 for the -p
+# port mapping below to reach the process inside the container.
+docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 docker run -d \
-  --name tristankerner-com \
+  --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   -v "$CERT_DIR:/etc/letsencrypt:ro" \
+  -e HOST=0.0.0.0 \
+  -e PORT="$CONTAINER_PORT" \
+  -e TLS_PORT="$CONTAINER_TLS_PORT" \
   -e TLS_CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem" \
   -e TLS_KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem" \
-  -p 80:80 -p 443:443 \
-  "$APP_IMAGE"
+  -p "$HTTP_PORT:$CONTAINER_PORT" \
+  -p "$HTTPS_PORT:$CONTAINER_TLS_PORT" \
+  "$IMAGE_NAME:latest"
 
-echo "Up. Remember the GCP firewall must allow ingress on tcp:80 and tcp:443."
+# `docker load` just repointed the "$IMAGE_NAME:latest" tag at the new
+# image, leaving the previous version dangling (untagged); drop it so the
+# resource-limited VM's disk doesn't grow with every deploy. This only ever
+# touches dangling image layers, never $STATE_DIR.
+docker image prune -f >/dev/null
+
+echo "Up. Remember the GCP firewall must allow ingress on tcp:$HTTP_PORT and tcp:$HTTPS_PORT."
