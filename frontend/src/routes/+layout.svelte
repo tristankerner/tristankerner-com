@@ -8,6 +8,7 @@
     import logo from '$lib/assets/logo.svg';
     import logo_inverted from '$lib/assets/logo-inverted.svg';
     import Counter from "$lib/Counter.svelte";
+    import ConsentBanner from "$lib/consent/ConsentBanner.svelte";
     import { Navbar, NavBrand, NavLi, NavUl, NavHamburger,  DarkMode, Footer, FooterCopyright, FooterLinkGroup, FooterLink } from "flowbite-svelte";
     import { LinkedinSolid,  GithubSolid } from "flowbite-svelte-icons";
 
@@ -74,5 +75,4 @@
         <FooterLink href="https://github.com/tristankerner"><GithubSolid size="lg"/></FooterLink>
     </FooterLinkGroup>
 </Footer>
-
-
+<ConsentBanner />
