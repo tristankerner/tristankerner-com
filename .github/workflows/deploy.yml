@@ -1,9 +1,13 @@
-# Builds the app image and ships it straight to the production VM - no
-# container registry involved. The image is `docker save`'d to a tarball,
-# copied to the VM over an IAP-tunneled SSH connection (so the VM never
-# needs port 22 open to the public internet), and loaded with `docker load`.
-# deploy/run.sh then stops/replaces the previously running app container in
-# place, leaving any certbot-issued certificate under $STATE_DIR untouched.
+# Builds the frontend and server directly on the runner (with dependency
+# caching), runs both test suites with a 90%+ coverage gate, then packages
+# the already-built artifacts into the runtime image (see Dockerfile - it no
+# longer compiles anything itself) and ships it straight to the production
+# VM - no container registry involved. The image is `docker save`'d to a
+# tarball, copied to the VM over an IAP-tunneled SSH connection (so the VM
+# never needs port 22 open to the public internet), and loaded with
+# `docker load`. deploy/run.sh then stops/replaces the previously running
+# app container in place, leaving any certbot-issued certificate under
+# $STATE_DIR untouched.
 #
 # --- One-time setup on the GCP side (not done by this workflow) ----------
 # 1. Enable OS Login on the project or instance (metadata `enable-oslogin =
@@ -25,7 +29,7 @@
 #    HTTPS_PORT below resolve to (80/443 by default) from the public
 #    internet - that's the actual web traffic, separate from the IAP/SSH
 #    rule above.
-name: Build and deploy
+name: Build, test, and deploy
 
 on:
   push:
@@ -37,27 +41,81 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build-test-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      # setup-bun has no built-in dependency cache (unlike actions/setup-node),
+      # so this caches bun's own global package cache directly, keyed on the
+      # lockfile.
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: frontend
+        run: bun run build
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      # Caches ~/.cargo and target/ keyed on Cargo.lock, so an unrelated
+      # frontend-only change doesn't force a full recompile of every crate.
+      # Also speeds up the coverage-instrumented test compile below, since
+      # both share the same crates.io registry/download cache.
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build server
+        run: cargo build --release
+
+      # Thresholds live in frontend/vite.config.ts (`test.coverage.thresholds`)
+      # and the --fail-under-* flags below, so these steps fail on their own
+      # (blocking the image build/deploy steps further down) if either suite
+      # drops under 90%.
+      - name: Frontend tests with coverage
+        working-directory: frontend
+        run: bun run coverage
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      # lines/regions/functions only - branch coverage in cargo-llvm-cov
+      # needs nightly Rust, which this project doesn't otherwise use.
+      - name: Server tests with coverage
+        run: |
+          cargo llvm-cov \
+            --fail-under-lines 90 \
+            --fail-under-regions 90 \
+            --fail-under-functions 90
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # cache-from/cache-to persist Docker layer cache in the GitHub Actions
-      # cache across runs (subject to its ~10GB per-repo eviction), so a
-      # source-only change reuses the dependency-compile layers below
-      # instead of re-downloading/recompiling every Cargo/Bun dependency.
+      # The Dockerfile just copies the frontend/target artifacts built above
+      # into a distroless runtime image - no compilation happens in Docker,
+      # so there's no expensive layer to cache here anymore.
       - name: Build app image
         uses: docker/build-push-action@v6
         with:
           context: .
           tags: ${{ vars.IMAGE_NAME || 'tristankerner-com' }}:latest
           load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Save image to a tarball (no registry involved)
         env:

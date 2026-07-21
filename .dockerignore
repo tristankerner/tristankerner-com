@@ -1,4 +1,13 @@
-/target
+# Only the compiled release binary is needed in the image - everything else
+# under target/ (debug builds, incremental artifacts, the llvm-cov coverage
+# build) is CI-only. Docker can't re-include a file under an excluded parent
+# directory, hence un-excluding /target/release before re-excluding its
+# other contents.
+/target/*
+!/target/release
+/target/release/*
+!/target/release/tristankerner-com
+
 .idea
 .claude
 /raw_assets
@@ -6,6 +15,5 @@
 .git
 frontend/node_modules
 frontend/.svelte-kit
-frontend/build
 frontend/.idea
 frontend/.vscode

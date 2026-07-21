@@ -84,3 +84,58 @@ fn bind_port() -> u16 {
         .and_then(|p| p.parse().ok())
         .unwrap_or(8080)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    // HOST/PORT are process-wide env vars shared by every test here, hence
+    // #[serial] plus the unsafe wrappers (set_var/remove_var are unsafe as of
+    // the 2024 edition).
+    fn set_env(key: &str, value: &str) {
+        unsafe { std::env::set_var(key, value) };
+    }
+
+    fn remove_env(key: &str) {
+        unsafe { std::env::remove_var(key) };
+    }
+
+    #[test]
+    #[serial(bind_env)]
+    fn bind_host_defaults_to_loopback() {
+        remove_env("HOST");
+        assert_eq!(bind_host(), "127.0.0.1");
+    }
+
+    #[test]
+    #[serial(bind_env)]
+    fn bind_host_reads_the_env_override() {
+        set_env("HOST", "0.0.0.0");
+        assert_eq!(bind_host(), "0.0.0.0");
+        remove_env("HOST");
+    }
+
+    #[test]
+    #[serial(bind_env)]
+    fn bind_port_defaults_to_8080() {
+        remove_env("PORT");
+        assert_eq!(bind_port(), 8080);
+    }
+
+    #[test]
+    #[serial(bind_env)]
+    fn bind_port_reads_the_env_override() {
+        set_env("PORT", "3000");
+        assert_eq!(bind_port(), 3000);
+        remove_env("PORT");
+    }
+
+    #[test]
+    #[serial(bind_env)]
+    fn bind_port_falls_back_to_8080_for_an_invalid_value() {
+        set_env("PORT", "not-a-port");
+        assert_eq!(bind_port(), 8080);
+        remove_env("PORT");
+    }
+}

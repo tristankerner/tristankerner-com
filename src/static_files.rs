@@ -4,7 +4,13 @@ use actix_web::http::header::{self, ContentEncoding, HeaderValue};
 use actix_web::{HttpRequest, HttpResponse, Result};
 use std::path::{Path, PathBuf};
 
+#[cfg(not(test))]
 const BUILD_DIR: &str = "./frontend/build";
+// Tests use a tiny checked-in fixture tree instead of the real frontend
+// build output, so `cargo test` doesn't depend on the frontend having been
+// built first. See tests/fixtures/static-build/.
+#[cfg(test)]
+const BUILD_DIR: &str = "./tests/fixtures/static-build";
 
 // Maps a request path to a relative path inside `BUILD_DIR`. Returns None for the
 // root path and for any path with empty, dot-prefixed (`.`, `..`, hidden files),
@@ -30,9 +36,11 @@ fn sanitized_rel_path(request_path: &str) -> Option<PathBuf> {
 // SvelteKit (adapter-static, prerender = true) emits one static HTML file per
 // route (e.g. `/about-me` -> `about-me.html`). Resolution order: exact asset
 // file, prerendered page, SPA shell for genuinely unknown routes.
-fn resolve_target(request_path: &str) -> PathBuf {
-    let build_dir = Path::new(BUILD_DIR);
-
+//
+// Takes `build_dir` explicitly (rather than reading BUILD_DIR itself) so
+// tests can point it at a throwaway directory instead of the real build
+// output.
+fn resolve_target(request_path: &str, build_dir: &Path) -> PathBuf {
     if let Some(rel) = sanitized_rel_path(request_path) {
         let direct = build_dir.join(&rel);
         if direct.is_file() {
@@ -100,7 +108,7 @@ pub(crate) async fn serve(req: HttpRequest) -> Result<HttpResponse> {
             .finish());
     }
 
-    let target = resolve_target(req.path());
+    let target = resolve_target(req.path(), Path::new(BUILD_DIR));
     let is_html = target.extension().is_some_and(|ext| ext == "html");
 
     let accept_encoding = req
@@ -144,4 +152,258 @@ pub(crate) async fn serve(req: HttpRequest) -> Result<HttpResponse> {
         HeaderValue::from_static(cache_control),
     );
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::http::StatusCode;
+    use actix_web::test::TestRequest;
+    use std::fs;
+
+    #[test]
+    fn sanitized_rel_path_rejects_the_root() {
+        assert_eq!(sanitized_rel_path("/"), None);
+        assert_eq!(sanitized_rel_path(""), None);
+    }
+
+    #[test]
+    fn sanitized_rel_path_accepts_a_simple_path() {
+        assert_eq!(sanitized_rel_path("/about-me"), Some(PathBuf::from("about-me")));
+    }
+
+    #[test]
+    fn sanitized_rel_path_accepts_a_nested_path() {
+        assert_eq!(
+            sanitized_rel_path("/_app/immutable/chunk.js"),
+            Some(PathBuf::from("_app/immutable/chunk.js"))
+        );
+    }
+
+    #[test]
+    fn sanitized_rel_path_trims_a_trailing_slash() {
+        assert_eq!(sanitized_rel_path("/about-me/"), Some(PathBuf::from("about-me")));
+    }
+
+    #[test]
+    fn sanitized_rel_path_rejects_dot_segments() {
+        assert_eq!(sanitized_rel_path("/../secret"), None);
+        assert_eq!(sanitized_rel_path("/.env"), None);
+        assert_eq!(sanitized_rel_path("/foo/../bar"), None);
+    }
+
+    #[test]
+    fn sanitized_rel_path_rejects_backslashes() {
+        assert_eq!(sanitized_rel_path("/foo\\bar"), None);
+    }
+
+    #[test]
+    fn sanitized_rel_path_rejects_empty_interior_segments() {
+        // "/a//b" trims to "a//b", which splits into an empty middle segment.
+        assert_eq!(sanitized_rel_path("/a//b"), None);
+    }
+
+    #[test]
+    fn resolve_target_matches_a_direct_file() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("robots.txt"), "hi").unwrap();
+
+        assert_eq!(
+            resolve_target("/robots.txt", dir.path()),
+            dir.path().join("robots.txt")
+        );
+    }
+
+    #[test]
+    fn resolve_target_falls_back_to_a_prerendered_html_page() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("about-me.html"), "hi").unwrap();
+
+        assert_eq!(
+            resolve_target("/about-me", dir.path()),
+            dir.path().join("about-me.html")
+        );
+    }
+
+    #[test]
+    fn resolve_target_prefers_a_direct_file_over_the_html_variant() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("about-me"), "direct").unwrap();
+        fs::write(dir.path().join("about-me.html"), "html").unwrap();
+
+        assert_eq!(
+            resolve_target("/about-me", dir.path()),
+            dir.path().join("about-me")
+        );
+    }
+
+    #[test]
+    fn resolve_target_falls_back_to_the_spa_shell_for_unknown_routes() {
+        let dir = tempfile::tempdir().unwrap();
+
+        assert_eq!(
+            resolve_target("/nothing-here", dir.path()),
+            dir.path().join("index.html")
+        );
+    }
+
+    #[test]
+    fn resolve_target_falls_back_to_the_spa_shell_for_an_unsafe_path() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            resolve_target("/../../etc/passwd", dir.path()),
+            dir.path().join("index.html")
+        );
+    }
+
+    #[test]
+    fn encoding_allowed_accepts_a_listed_encoding() {
+        assert!(encoding_allowed("gzip, br", "br"));
+        assert!(encoding_allowed("gzip, br", "gzip"));
+    }
+
+    #[test]
+    fn encoding_allowed_rejects_an_unlisted_encoding() {
+        assert!(!encoding_allowed("gzip", "br"));
+        assert!(!encoding_allowed("", "br"));
+    }
+
+    #[test]
+    fn encoding_allowed_is_case_insensitive() {
+        assert!(encoding_allowed("GZIP", "gzip"));
+    }
+
+    #[test]
+    fn encoding_allowed_rejects_a_q_zero_encoding() {
+        assert!(!encoding_allowed("br;q=0", "br"));
+        assert!(!encoding_allowed("br; q=0.0", "br"));
+    }
+
+    #[test]
+    fn encoding_allowed_accepts_a_nonzero_q_value() {
+        assert!(encoding_allowed("br;q=0.5", "br"));
+    }
+
+    #[test]
+    fn precompressed_variant_prefers_brotli_over_gzip() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("robots.txt");
+        fs::write(format!("{}.br", target.display()), "br").unwrap();
+        fs::write(format!("{}.gz", target.display()), "gz").unwrap();
+
+        let (path, encoding) = precompressed_variant(&target, "gzip, br").unwrap();
+        assert_eq!(path, dir.path().join("robots.txt.br"));
+        assert_eq!(encoding, ContentEncoding::Brotli);
+    }
+
+    #[test]
+    fn precompressed_variant_falls_back_to_gzip_when_brotli_is_not_accepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("robots.txt");
+        fs::write(format!("{}.br", target.display()), "br").unwrap();
+        fs::write(format!("{}.gz", target.display()), "gz").unwrap();
+
+        let (path, encoding) = precompressed_variant(&target, "gzip").unwrap();
+        assert_eq!(path, dir.path().join("robots.txt.gz"));
+        assert_eq!(encoding, ContentEncoding::Gzip);
+    }
+
+    #[test]
+    fn precompressed_variant_is_none_when_nothing_is_accepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("robots.txt");
+        fs::write(format!("{}.br", target.display()), "br").unwrap();
+
+        assert!(precompressed_variant(&target, "identity").is_none());
+    }
+
+    #[test]
+    fn precompressed_variant_is_none_when_no_variant_file_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("robots.txt");
+
+        assert!(precompressed_variant(&target, "gzip, br").is_none());
+    }
+
+    #[actix_web::test]
+    async fn serve_rejects_non_get_head_methods() {
+        let req = TestRequest::post().uri("/").to_http_request();
+        let res = serve(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(res.headers().get(header::ALLOW).unwrap(), "GET, HEAD");
+    }
+
+    #[actix_web::test]
+    async fn serve_returns_the_fixture_index_page() {
+        let req = TestRequest::get().uri("/").to_http_request();
+        let res = serve(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.headers().get(header::CACHE_CONTROL).unwrap(), "no-cache");
+        assert_eq!(res.headers().get(header::CONTENT_TYPE).unwrap(), "text/html; charset=utf-8");
+    }
+
+    #[actix_web::test]
+    async fn serve_returns_a_prerendered_page_for_a_known_route() {
+        let req = TestRequest::get().uri("/about-me").to_http_request();
+        let res = serve(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.headers().get(header::CONTENT_TYPE).unwrap(), "text/html; charset=utf-8");
+    }
+
+    #[actix_web::test]
+    async fn serve_falls_back_to_the_spa_shell_for_an_unknown_route() {
+        let req = TestRequest::get().uri("/totally/unknown/route").to_http_request();
+        let res = serve(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.headers().get(header::CACHE_CONTROL).unwrap(), "no-cache");
+    }
+
+    #[actix_web::test]
+    async fn serve_marks_hashed_app_chunks_as_immutable() {
+        let req = TestRequest::get()
+            .uri("/_app/immutable/chunk.js")
+            .to_http_request();
+        let res = serve(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            res.headers().get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=31536000, immutable"
+        );
+    }
+
+    #[actix_web::test]
+    async fn serve_uses_a_short_cache_for_a_plain_asset() {
+        let req = TestRequest::get().uri("/robots.txt").to_http_request();
+        let res = serve(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            res.headers().get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=3600"
+        );
+        assert!(res.headers().get(header::CONTENT_ENCODING).is_none());
+    }
+
+    #[actix_web::test]
+    async fn serve_prefers_the_brotli_variant_when_accepted() {
+        let req = TestRequest::get()
+            .uri("/robots.txt")
+            .insert_header((header::ACCEPT_ENCODING, "gzip, br"))
+            .to_http_request();
+        let res = serve(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.headers().get(header::CONTENT_ENCODING).unwrap(), "br");
+        // Content type must reflect the original file, not the .br variant.
+        assert_eq!(res.headers().get(header::CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
+        assert_eq!(res.headers().get(header::VARY).unwrap(), "accept-encoding");
+    }
+
+    #[actix_web::test]
+    async fn serve_falls_back_to_gzip_when_brotli_is_not_accepted() {
+        let req = TestRequest::get()
+            .uri("/robots.txt")
+            .insert_header((header::ACCEPT_ENCODING, "gzip"))
+            .to_http_request();
+        let res = serve(req).await.unwrap();
+        assert_eq!(res.headers().get(header::CONTENT_ENCODING).unwrap(), "gzip");
+    }
 }

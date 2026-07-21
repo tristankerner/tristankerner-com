@@ -23,3 +23,10 @@ dotenvy = "0.15.7"
 lto = true
 codegen-units = 1
 strip = true
+
+[dev-dependencies]
+actix-test = "0.1.5"
+awc = "3.8.2"
+rcgen = "0.14.8"
+serial_test = "3.5.0"
+tempfile = "3.27.0"

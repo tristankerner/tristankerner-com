@@ -1,21 +1,12 @@
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1.3.14 AS frontend-builder
-WORKDIR /app/frontend
-COPY frontend/package.json frontend/bun.lock ./
-RUN bun install --frozen-lockfile
-COPY frontend/ ./
-RUN bun run build
-
-FROM rust:1.96.0-slim-bookworm AS server-builder
-WORKDIR /app
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs \
-    && cargo build --release \
-    && rm -rf src
-COPY src ./src
-RUN touch src/main.rs && cargo build --release
-
+# The frontend (frontend/build/) and the server release binary
+# (target/release/tristankerner-com) are built on the GitHub Actions runner,
+# not here (see .github/workflows/deploy.yml) - that's where dependency
+# caching and the 90%+ test coverage gate live. This Dockerfile only
+# assembles the runtime image from those already-built artifacts, so
+# `docker build .` requires both to already exist in the build context.
+#
 # Distroless: no shell, package manager, or other OS tooling - just glibc +
 # libgcc (this binary's only two dynamic deps, confirmed via ldd) to run it
 # alongside the static frontend build. Root, not :nonroot, since
@@ -23,8 +14,8 @@ RUN touch src/main.rs && cargo build --release
 # CAP_NET_BIND_SERVICE that uid 65532 wouldn't have.
 FROM gcr.io/distroless/cc-debian12
 WORKDIR /app
-COPY --from=server-builder /app/target/release/tristankerner-com ./tristankerner-com
-COPY --from=frontend-builder /app/frontend/build ./frontend/build
+COPY target/release/tristankerner-com ./tristankerner-com
+COPY frontend/build ./frontend/build
 
 ENV HOST=0.0.0.0
 ENV PORT=80

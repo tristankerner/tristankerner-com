@@ -30,25 +30,47 @@ const metadataModules = import.meta.glob<PostMetadata | undefined>(
 
 const componentPathByPermalink = new Map<string, string>();
 
+// Extracted so the naming-pattern and missing-metadata validation can be unit
+// tested directly with synthetic inputs - both only ever fail for a hand-edited
+// or malformed post file, which the real posts/ fixtures never exercise.
+export function parsePostEntry(
+  path: string,
+  metadata: PostMetadata | undefined,
+): { date: string; slug: string; metadata: PostMetadata } {
+  // A path always has at least one "/"-separated segment, so .pop() here
+  // never actually returns undefined; the fallback only exists to satisfy
+  // the type checker.
+  /* v8 ignore next */
+  const filename = path.split("/").pop() ?? path;
+  const match = filename.match(FILENAME_PATTERN);
+  if (!match) {
+    throw new Error(
+      `Blog post file "${filename}" doesn't match the required "YYYY-MM-DD-title-slug.md|svx|svelte" naming pattern.`,
+    );
+  }
+  if (!metadata) {
+    throw new Error(
+      `Blog post file "${filename}" is missing its "metadata" export (title, author, excerpt).`,
+    );
+  }
+  const [, date, slug] = match;
+  return { date, slug, metadata };
+}
+
+// Newest first; same-date posts (e.g. two posts published the same day) break
+// ties alphabetically by slug so ordering is still deterministic.
+export function comparePosts(a: Post, b: Post): number {
+  if (a.date === b.date) return a.slug.localeCompare(b.slug);
+  return b.date < a.date ? -1 : 1;
+}
+
 export const posts: Post[] = Object.entries(metadataModules)
   .map(([path, metadata]) => {
-    const filename = path.split("/").pop() ?? path;
-    const match = filename.match(FILENAME_PATTERN);
-    if (!match) {
-      throw new Error(
-        `Blog post file "${filename}" doesn't match the required "YYYY-MM-DD-title-slug.md|svx|svelte" naming pattern.`,
-      );
-    }
-    if (!metadata) {
-      throw new Error(
-        `Blog post file "${filename}" is missing its "metadata" export (title, author, excerpt).`,
-      );
-    }
-    const [, date, slug] = match;
-    componentPathByPermalink.set(`${date}/${slug}`, path);
-    return { date, slug, metadata };
+    const post = parsePostEntry(path, metadata);
+    componentPathByPermalink.set(`${post.date}/${post.slug}`, path);
+    return post;
   })
-  .sort((a, b) => (a.date === b.date ? a.slug.localeCompare(b.slug) : b.date < a.date ? -1 : 1));
+  .sort(comparePosts);
 
 export function totalPages(): number {
   return Math.max(1, Math.ceil(posts.length / POSTS_PER_PAGE));

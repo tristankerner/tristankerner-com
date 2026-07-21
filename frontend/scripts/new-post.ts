@@ -20,13 +20,13 @@ import { fileURLToPath } from "node:url";
 
 const POSTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "lib", "posts");
 
-function printUsage(): void {
+export function printUsage(): void {
   console.log(
     `Usage: bun run new-post -- --title <title> --author <name> --date <YYYY-MM-DD> --template <svelte|md>`,
   );
 }
 
-function slugify(title: string): string {
+export function slugify(title: string): string {
   return title
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -35,13 +35,13 @@ function slugify(title: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function isValidDate(date: string): boolean {
+export function isValidDate(date: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   const parsed = new Date(`${date}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
 }
 
-function mdTemplate(title: string, author: string): string {
+export function mdTemplate(title: string, author: string): string {
   return `---
 title: ${JSON.stringify(title)}
 author: ${JSON.stringify(author)}
@@ -52,7 +52,7 @@ Write your post content here using Markdown.
 `;
 }
 
-function svelteTemplate(title: string, author: string): string {
+export function svelteTemplate(title: string, author: string): string {
   return `<script module lang="ts">
   export const metadata = {
     title: ${JSON.stringify(title)},
@@ -65,9 +65,9 @@ function svelteTemplate(title: string, author: string): string {
 `;
 }
 
-async function main(): Promise<void> {
+export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const { values } = parseArgs({
-    args: process.argv.slice(2),
+    args: argv,
     options: {
       title: { type: "string" },
       author: { type: "string" },
@@ -123,7 +123,14 @@ async function main(): Promise<void> {
   console.log("Add the post's content to that file, then run `bun run build` to prerender it.");
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Guarded so importing this module's helpers for tests doesn't also run the
+// CLI against the test runner's own argv. import.meta.main is never true
+// under the test runner, so this block is unreachable from tests by design.
+/* v8 ignore start */
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
+/* v8 ignore stop */

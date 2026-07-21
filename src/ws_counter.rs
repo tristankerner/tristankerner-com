@@ -216,3 +216,240 @@ pub(crate) fn start() -> watch::Sender<String> {
     spawn_visitor_ticker(tx.clone(), initial_counters);
     tx
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::test::TestRequest;
+    use serial_test::serial;
+
+    #[test]
+    fn counters_json_serializes_the_expected_shape() {
+        let counters = vec![
+            PathVisitorCount {
+                path: "/".to_string(),
+                total_unique_visitors: 3,
+            },
+            PathVisitorCount {
+                path: "/about-me".to_string(),
+                total_unique_visitors: 0,
+            },
+        ];
+
+        assert_eq!(
+            counters_json(&counters),
+            r#"[{"path":"/","total_unique_visitors":3},{"path":"/about-me","total_unique_visitors":0}]"#
+        );
+    }
+
+    #[test]
+    fn same_origin_allows_requests_with_no_origin_header() {
+        let req = TestRequest::default()
+            .insert_header((header::HOST, "example.com"))
+            .to_http_request();
+        assert!(same_origin(&req));
+    }
+
+    #[test]
+    fn same_origin_allows_a_matching_https_origin() {
+        let req = TestRequest::default()
+            .insert_header((header::HOST, "example.com"))
+            .insert_header((header::ORIGIN, "https://example.com"))
+            .to_http_request();
+        assert!(same_origin(&req));
+    }
+
+    #[test]
+    fn same_origin_allows_a_matching_http_origin_case_insensitively() {
+        let req = TestRequest::default()
+            .insert_header((header::HOST, "Example.com"))
+            .insert_header((header::ORIGIN, "http://example.com"))
+            .to_http_request();
+        assert!(same_origin(&req));
+    }
+
+    #[test]
+    fn same_origin_rejects_a_mismatched_origin() {
+        let req = TestRequest::default()
+            .insert_header((header::HOST, "example.com"))
+            .insert_header((header::ORIGIN, "https://evil.example"))
+            .to_http_request();
+        assert!(!same_origin(&req));
+    }
+
+    #[test]
+    fn same_origin_rejects_an_origin_without_a_recognized_scheme() {
+        let req = TestRequest::default()
+            .insert_header((header::HOST, "example.com"))
+            .insert_header((header::ORIGIN, "ftp://example.com"))
+            .to_http_request();
+        assert!(!same_origin(&req));
+    }
+
+    #[test]
+    fn same_origin_rejects_when_host_is_missing() {
+        let req = TestRequest::default()
+            .insert_header((header::ORIGIN, "https://example.com"))
+            .to_http_request();
+        assert!(!same_origin(&req));
+    }
+
+    #[test]
+    fn same_origin_rejects_a_non_utf8_origin_header() {
+        let bad_value = actix_web::http::header::HeaderValue::from_bytes(&[0xff, 0xfe]).unwrap();
+        let req = TestRequest::default()
+            .insert_header((header::HOST, "example.com"))
+            .insert_header((header::ORIGIN, bad_value))
+            .to_http_request();
+        assert!(!same_origin(&req));
+    }
+
+    #[test]
+    #[serial(ws_sessions)]
+    fn session_slot_enforces_the_concurrency_cap_and_releases_on_drop() {
+        // Baseline first: WS_SESSIONS is process-wide, so start from whatever
+        // it currently is rather than assuming a pristine 0.
+        let baseline = WS_SESSIONS.load(Ordering::Relaxed);
+        let room_left = MAX_WS_SESSIONS - baseline;
+
+        let slots: Vec<SessionSlot> = (0..room_left)
+            .map(|_| SessionSlot::try_acquire().expect("should have room"))
+            .collect();
+        assert_eq!(WS_SESSIONS.load(Ordering::Relaxed), MAX_WS_SESSIONS);
+
+        assert!(SessionSlot::try_acquire().is_none());
+
+        drop(slots);
+        assert_eq!(WS_SESSIONS.load(Ordering::Relaxed), baseline);
+
+        // The budget is usable again once slots are freed.
+        let reacquired = SessionSlot::try_acquire().expect("should have room again");
+        drop(reacquired);
+    }
+
+    #[actix_web::test]
+    async fn start_seeds_the_watch_channel_with_zeroed_counts_for_every_seed_path() {
+        let tx = start();
+        let rx = tx.subscribe();
+        let initial = rx.borrow().clone();
+
+        assert_eq!(
+            initial,
+            r#"[{"path":"/","total_unique_visitors":0},{"path":"/about-me","total_unique_visitors":0}]"#
+        );
+    }
+
+    // Real websocket-protocol integration tests for `handle`, using a bound
+    // test server plus a real client (rather than `start()`, so each test
+    // controls its own watch channel directly instead of waiting on the real
+    // 60s visitor ticker).
+    mod handle_ws {
+        use super::*;
+        use actix_web::web::Bytes;
+        use actix_web::{App, web};
+        use awc::ws::{Frame, Message};
+        use futures_util::{SinkExt, StreamExt};
+
+        fn test_app_with_channel() -> (actix_test::TestServer, watch::Sender<String>) {
+            let (tx, _rx) = watch::channel(counters_json(&[]));
+            let data = web::Data::new(tx.clone());
+            let srv = actix_test::start(move || {
+                App::new()
+                    .app_data(data.clone())
+                    .route("/ws-counter", web::get().to(handle))
+            });
+            (srv, tx)
+        }
+
+        #[actix_web::test]
+        async fn sends_the_current_snapshot_immediately_on_connect() {
+            let counters = vec![PathVisitorCount {
+                path: "/".to_string(),
+                total_unique_visitors: 5,
+            }];
+            let (tx, _rx) = watch::channel(counters_json(&counters));
+            let data = web::Data::new(tx);
+            let mut srv = actix_test::start(move || {
+                App::new()
+                    .app_data(data.clone())
+                    .route("/ws-counter", web::get().to(handle))
+            });
+
+            let mut framed = srv.ws_at("/ws-counter").await.unwrap();
+            let frame = framed.next().await.unwrap().unwrap();
+
+            match frame {
+                Frame::Text(bytes) => {
+                    assert_eq!(
+                        bytes,
+                        Bytes::from_static(br#"[{"path":"/","total_unique_visitors":5}]"#)
+                    );
+                }
+                other => panic!("expected an initial text snapshot, got {other:?}"),
+            }
+        }
+
+        #[actix_web::test]
+        async fn pushes_updates_published_on_the_watch_channel() {
+            let (mut srv, tx) = test_app_with_channel();
+            let mut framed = srv.ws_at("/ws-counter").await.unwrap();
+            let _initial = framed.next().await.unwrap().unwrap();
+
+            let updated = counters_json(&[PathVisitorCount {
+                path: "/".to_string(),
+                total_unique_visitors: 9,
+            }]);
+            tx.send(updated.clone()).unwrap();
+
+            let frame = framed.next().await.unwrap().unwrap();
+            match frame {
+                Frame::Text(bytes) => assert_eq!(bytes, Bytes::from(updated)),
+                other => panic!("expected the updated snapshot, got {other:?}"),
+            }
+        }
+
+        #[actix_web::test]
+        async fn responds_to_a_client_ping_with_a_pong() {
+            let (mut srv, _tx) = test_app_with_channel();
+            let mut framed = srv.ws_at("/ws-counter").await.unwrap();
+            let _initial = framed.next().await.unwrap().unwrap();
+
+            framed
+                .send(Message::Ping(Bytes::from_static(b"hi")))
+                .await
+                .unwrap();
+
+            let frame = framed.next().await.unwrap().unwrap();
+            assert!(matches!(frame, Frame::Pong(bytes) if bytes == Bytes::from_static(b"hi")));
+        }
+
+        #[actix_web::test]
+        async fn closes_the_session_when_the_client_sends_close() {
+            let (mut srv, _tx) = test_app_with_channel();
+            let mut framed = srv.ws_at("/ws-counter").await.unwrap();
+            let _initial = framed.next().await.unwrap().unwrap();
+
+            framed.send(Message::Close(None)).await.unwrap();
+
+            match framed.next().await {
+                Some(Ok(Frame::Close(_))) => {}
+                None => {}
+                other => panic!("expected a close frame or end of stream, got {other:?}"),
+            }
+        }
+
+        #[actix_web::test]
+        async fn rejects_a_cross_origin_websocket_upgrade() {
+            let (srv, _tx) = test_app_with_channel();
+
+            let client = awc::Client::new();
+            let result = client
+                .ws(srv.url("/ws-counter"))
+                .header("Origin", "https://evil.example")
+                .connect()
+                .await;
+
+            assert!(result.is_err());
+        }
+    }
+}
