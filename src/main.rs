@@ -384,7 +384,21 @@ async fn main() -> std::io::Result<()> {
             .default_service(web::to(serve_frontend))
     })
     .max_connections(MAX_CONNECTIONS)
-    .bind(("127.0.0.1", 8080))?
+    .bind((bind_host(), bind_port()))?
     .run()
     .await
+}
+
+// Defaults match the bare-metal VPS deployment (loopback behind a fronting TLS
+// proxy); HOST/PORT let the Docker image bind 0.0.0.0 on a different port
+// without changing that default.
+fn bind_host() -> String {
+    std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string())
+}
+
+fn bind_port() -> u16 {
+    std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8080)
 }

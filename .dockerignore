@@ -1,0 +1,11 @@
+/target
+.idea
+.claude
+/raw_assets
+
+.git
+frontend/node_modules
+frontend/.svelte-kit
+frontend/build
+frontend/.idea
+frontend/.vscode
