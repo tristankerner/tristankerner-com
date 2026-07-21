@@ -21,10 +21,23 @@ WORKDIR /app
 COPY --from=server-builder /app/target/release/tristankerner-com ./tristankerner-com
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
-# No TLS termination in the actix server itself (see src/main.rs); 443 is
-# exposed for a fronting reverse proxy, only 80 is actually served.
 ENV HOST=0.0.0.0
 ENV PORT=80
+
+# TLS is opt-in (see src/main.rs): set TLS_CERT_PATH/TLS_KEY_PATH to a
+# certbot-managed fullchain.pem/privkey.pem to have this process terminate
+# HTTPS itself and redirect plain HTTP to it. e.g., with a certbot container
+# (dns-cloudflare plugin) writing into a shared volume:
+#
+#   docker run \
+#     -v certbot-etc:/etc/letsencrypt:ro \
+#     -e TLS_CERT_PATH=/etc/letsencrypt/live/<domain>/fullchain.pem \
+#     -e TLS_KEY_PATH=/etc/letsencrypt/live/<domain>/privkey.pem \
+#     -p 80:80 -p 443:443 tristankerner-com
+#
+# The cert/key are re-read on their mtime changing, so certbot's renewal
+# doesn't require restarting this container. Leave both env vars unset to
+# serve plain HTTP only (e.g. behind an external TLS-terminating proxy).
 EXPOSE 80 443
 
 ENTRYPOINT ["./tristankerner-com"]
