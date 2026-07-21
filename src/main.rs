@@ -275,10 +275,13 @@ impl ResolvesServerCert for ReloadingCertResolver {
 // live/<domain>/{fullchain,privkey}.pem mounted read-only) to serve HTTPS on
 // TLS_PORT. Leaving them unset preserves the plain-HTTP-only behavior.
 fn tls_server_config() -> std::io::Result<Option<ServerConfig>> {
-    let (Ok(cert_path), Ok(key_path)) = (
-        std::env::var("TLS_CERT_PATH"),
-        std::env::var("TLS_KEY_PATH"),
-    ) else {
+    // Blank counts as unset too, since .env ships these keys present but
+    // commented/empty by default.
+    let cert_path = std::env::var("TLS_CERT_PATH")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let key_path = std::env::var("TLS_KEY_PATH").ok().filter(|s| !s.is_empty());
+    let (Some(cert_path), Some(key_path)) = (cert_path, key_path) else {
         return Ok(None);
     };
 
@@ -491,6 +494,14 @@ fn spawn_visitor_ticker(tx: watch::Sender<String>, mut counters: Vec<PathVisitor
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Missing .env is fine (e.g. the Docker image, which gets config purely
+    // via -e/--env-file); an actually malformed one should fail loudly.
+    if let Err(e) = dotenvy::dotenv()
+        && !e.not_found()
+    {
+        panic!("failed to load .env: {e}");
+    }
+
     let initial_counters: Vec<PathVisitorCount> = SEED_PATHS
         .iter()
         .map(|path| PathVisitorCount {

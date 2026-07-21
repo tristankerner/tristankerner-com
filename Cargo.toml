@@ -16,6 +16,7 @@ mime_guess = "2"
 tokio = { version = "1.53.0", features = ["macros", "sync"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-pemfile = "2"
+dotenvy = "0.15.7"
 
 # Slower compile, but a smaller and faster binary for the resource-limited VPS.
 [profile.release]
