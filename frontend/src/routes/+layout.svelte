@@ -55,6 +55,7 @@
             <NavLi href="/">Home</NavLi>
             <NavLi href="/blog">Blog</NavLi>
             <NavLi href="/memory-lane">Memory Ln</NavLi>
+            <NavLi href="https://1drv.ms/w/c/239aef575c4ddc25/IQCeqa91tM-YQKqHdq13mAb_AZ8QbYSijxIFYrv6GKZvzq0?e=Y1Lik5" target="_blank">Resume</NavLi>
             <NavLi href="https://www.linkedin.com/in/tristan-kerner-754343135" target="_blank">LinkedIn</NavLi>
             <NavLi href="https://github.com/tristankerner" target="_blank">GitHub</NavLi>
             <NavLi href="/about-me">About</NavLi>

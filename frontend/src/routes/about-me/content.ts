@@ -1,0 +1,154 @@
+export type Profile = { name: string; title: string; tagline: string };
+
+export const profile: Profile = {
+    name: "Tristan Kerner",
+    title: "Senior Software Engineer",
+    tagline: "Platform, Integrations, Salesforce",
+};
+
+export const summary =
+    "I'm a software engineer with 13+ years building enterprise integrations, automation platforms, and API-driven SaaS " +
+    "applications, both inside and outside the Salesforce ecosystem. I like turning messy, manual processes into reliable " +
+    "systems — recent work cut integration failures by 89%, reduced Workato billing by 98%, and avoided roughly $850K in " +
+    "projected annual overage costs. I've connected CRM, marketing, accounting, customer success, eCommerce, and payment " +
+    "systems using REST/SOAP APIs, webhooks, Python, C#, SQL, and modern iPaaS tooling, partnering closely with Sales, " +
+    "Marketing, Product, and executive stakeholders across the EdTech, wine, and fine art industries.";
+
+export type SkillGroup = { name: string; skills: string[] };
+
+export const skillGroups: SkillGroup[] = [
+    { name: "Languages", skills: ["Python", "Apex", "C#", "SQL", "TypeScript", "JavaScript", "PHP"] },
+    {
+        name: "Integrations",
+        skills: [
+            "Salesforce",
+            "Stripe",
+            "Cvent",
+            "SendGrid",
+            "Workato",
+            "Fivetran",
+            "Marketing Cloud",
+            "Sage Intacct",
+            "Drupal",
+            "DocuSign",
+            "HubSpot",
+            "Authorize.net",
+            "NCS",
+            "TaxStatus",
+            "DropBox",
+            "Box",
+            "ShipCompliant",
+            "FedEx",
+            "Beverage Data Network (BDN) / Vermont Information Processing (VIP)",
+            "REST APIs",
+            "SOAP APIs",
+            "GraphQL",
+        ],
+    },
+    { name: "Data Platforms", skills: ["Databricks", "Delta Lake"] },
+    { name: "Databases & Tools", skills: ["PostgreSQL", "MySQL", "DuckDB", "Git", "Jira", "SFDX CLI", "Force.com Ant Migration Tool", "Postman", "Bruno", "Salesforce Data Loader"] },
+    { name: "Cloud & DevOps", skills: ["AWS", "CI/CD", "GitHub Actions", "CircleCI", "BitBucket Pipelines", "Docker"] },
+    { name: "Backend", skills: [".NET", "ASP.NET Core", "Node.js", "PySpark"] },
+    { name: "Frontend", skills: ["React", "Lightning Web Components", "Visualforce", "Aura Components", "SLDS", "Vue.js", "Svelte", "Tailwind", "HTML", "CSS", "Foundation for Sites", "MJML"] },
+    { name: "Architecture", skills: ["Microservices", "Event-Driven Architecture", "System Design", "API Design", "Integration Architecture", "Observability"] },
+    { name: "Identity & Security", skills: ["Okta", "Keycloak", "SSO", "RBAC", "Access Reviews"] },
+];
+
+export type Certification = { name: string; id: string };
+
+export const certifications: Certification[] = [
+    { name: "Salesforce Certified Platform Developer I", id: "7922219" },
+    { name: "Salesforce Certified Platform Developer II", id: "7959126" },
+    { name: "Databricks Lakehouse Fundamentals", id: "103417846" },
+    { name: "Workato Foundations Level 1", id: "187474359" },
+    { name: "Workato Foundations Level 2", id: "187476397" },
+];
+
+export type Role = { title: string; duration: string };
+export type RoleLocation = "On-site" | "Hybrid" | "Remote";
+
+export type Job = {
+    company: string;
+    companyLocation: string;
+    duration: string;
+    description: string;
+    roleLocation: RoleLocation;
+    roles: Role[];
+    highlights: string[];
+};
+
+// roles are ordered most-recent first; everything after the first entry
+// is prior-role history used to generate the "Promoted through" line.
+export function promotedThroughText({ roles }: Pick<Job, "roles">): string {
+    const priorRoles = roles.slice(1).map((r) => `${r.title} (${r.duration})`);
+    if (priorRoles.length === 0) return "";
+    if (priorRoles.length === 1) return `Promoted through ${priorRoles[0]}.`;
+    const last = priorRoles.at(-1);
+    const rest = priorRoles.slice(0, -1).join(", ");
+    return `Promoted through ${rest}, and ${last}.`;
+}
+
+export const jobs: Job[] = [
+    {
+        company: "Independent School Management",
+        companyLocation: "Wilmington, DE",
+        duration: "August 2022 - May 2026",
+        description:
+            "ISM is dedicated to the advancement of school management by providing creative strategies, proven management techniques, personalized service, and EdTech SaaS solutions.",
+        roleLocation: "Remote",
+        roles: [
+            { title: "Senior Software Engineer, Platform / Integrations / Salesforce", duration: "2024 - 2026" },
+            { title: "Integration/Data Engineer, Salesforce Developer", duration: "2023 - 2024" },
+            { title: "Backend Developer, Salesforce Developer, Integration Engineer", duration: "2022 - 2023" },
+        ],
+        highlights: [
+            "Redesigned enterprise integration architecture for business-critical SaaS workflows, reducing Workato billable usage by 98%, cutting integration failures by 89%, and avoiding roughly $850K in projected annual overage costs.",
+            "Designed and deployed centralized monitoring, alerting, and observability tooling across 100+ integrations spanning 10+ SaaS and internal systems, reducing incident detection time by 90%.",
+            "Architected fault-tolerant, bidirectional integrations and scalable worker-queue processes for a web-based SaaS platform, supporting real-time events, scheduled bulk jobs, and idempotent retry logic.",
+            "Co-designed and implemented a Databricks Lakehouse platform consolidating data from 10+ business systems via Fivetran, Lakeflow Connect, and custom Python ETL pipelines.",
+            "Built PySpark and SQL-based validation, transformation, data quality monitoring, reverse ETL, and self-service analytics workflows to improve data reliability and accessibility.",
+            "Developed Salesforce customizations with Apex, Lightning Web Components, Flows, custom objects, validation rules, and platform integrations to support business-critical workflows and data synchronization.",
+            "Designed and maintained SaaS platform features for document management, communications, tax verification, and reporting, improving reliability and usability for customer-facing workflows.",
+            "Partnered with product and business stakeholders across multiple time zones to define MVP scope, ship faster, and prioritize follow-on iterations based on user and operational needs.",
+            "Investigated and resolved complex production issues across custom applications, integrations, and Salesforce environments using code analysis, monitoring data, and root-cause troubleshooting.",
+            "Contributed to security policy development, remediation efforts, penetration test follow-up, and recurring access reviews as part of the company's security team.",
+            "Launched and governed a company-wide documentation platform that improved knowledge sharing, standardized technical processes, and reduced operational dependency on tribal knowledge.",
+        ],
+    },
+    {
+        company: "Bespoke Collection",
+        companyLocation: "Napa, CA",
+        duration: "October 2013 - August 2022",
+        description: "Parent group of Blackbird Vineyards and Aerena Galleries & Gardens — DTC wine and fine art brands",
+        roleLocation: "Hybrid",
+        roles: [
+            { title: "Software & Systems Integration Lead", duration: "2019 - 2022" },
+            { title: "Salesforce Admin/Developer & Integration Engineer", duration: "2014 - 2019" },
+            { title: "Web Developer", duration: "2013 - 2014" },
+        ],
+        highlights: [
+            "Led development and systems integration strategy across multiple brands and six physical locations, supporting day-to-day business operations as well as high-level data analytics needs.",
+            "Designed and developed a headless eCommerce platform serving 60,000+ customers across multiple brands, with Salesforce as the system of record for customer, pricing, rewards, and product data; enabled personalized pricing, rewards programs, and cross-brand commerce experiences.",
+            "Engineered a time-limited cart hold and inventory reservation system, similar to ticket reservation platforms, enabling online sales of one-of-a-kind artwork by temporarily locking held items to prevent duplicate purchases while in another customer's cart.",
+            "Built and evolved custom integrations across Salesforce, eCommerce, point-of-sale, shipping, marketing, payment processing, and compliance systems, improving reliability and reducing manual work across direct-to-consumer and wholesale operations.",
+            "Owned Salesforce administration and development company-wide, including user access and permissions, workflow automation, data quality, reporting, configuration, and ongoing support for business-critical operations.",
+            "Developed CI/CD automation and Salesforce migration tooling using Apex, Python, REST APIs, Salesforce CLI, and Ant Migration Tool for heavily customized multi-brand environments, reducing manual deployment effort and improving data consistency.",
+            "Partnered with executives and business stakeholders to design Salesforce applications for inventory tracking, financial reporting, commissions, consignment, and reservations, improving operational visibility across multiple brands.",
+            "Negotiated technology vendor contracts and services, managed SaaS licenses, and maintained department financial budgets and forecasts.",
+        ],
+    },
+];
+
+export type PersonalProject = { name?: string; link?: string; description: string };
+
+export const personalProjects: PersonalProject[] = [
+    {
+        description:
+            "Implemented a fault-tolerant, scalable integration system in Python as a proof of concept, using RabbitMQ, Redis, PostgreSQL, and FastAPI.",
+    },
+    {
+        name: "This Website",
+        description:
+            "Built this personal site and blog with Rust, actix-web, SvelteKit, Tailwind, and Flowbite — optimized to run on minimal hardware.",
+    },
+];
