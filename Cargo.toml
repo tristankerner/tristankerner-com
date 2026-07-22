@@ -2,6 +2,7 @@
 name = "tristankerner-com"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 
 [dependencies]
 actix-files = "0.6.10"

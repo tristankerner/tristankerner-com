@@ -1,0 +1,40 @@
+Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International
+(CC BY-NC-ND 4.0)
+
+Copyright (c) 2026 Tristan Kerner
+
+This license covers the personal written content and photographs in this
+repository, specifically:
+
+  - Blog post text and images under frontend/src/lib/posts/
+  - The written narrative content of the About Me and Memory Lane pages
+    (frontend/src/routes/about-me/, frontend/src/routes/memory-lane/)
+  - Any personal photographs of the author appearing elsewhere in this
+    repository
+  - The written narrative content of the home page, header, and footer
+    (frontend/src/routes/+page.svelte, frontend/src/routes/+layout.svelte)
+
+It does NOT cover source code. Code snippets embedded within blog posts,
+along with all page markup/layout, component logic, styling, scripts,
+configuration, and build/deploy tooling, remain licensed under the MIT
+License (see ./LICENSE) regardless of where they appear.
+
+You are free to:
+  - Share — copy and redistribute the material in any medium or format
+
+Under the following terms:
+  - Attribution — You must give appropriate credit to Tristan Kerner,
+    provide a link to this license, and indicate if changes were made.
+  - NonCommercial — You may not use the material for commercial purposes.
+  - NoDerivatives — If you remix, transform, or build upon the material,
+    you may not distribute the modified material.
+  - No additional restrictions — You may not apply legal terms or
+    technological measures that legally restrict others from doing
+    anything the license permits.
+
+This is a human-readable summary of (and not a substitute for) the license.
+The full legal text is available at:
+https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode
+
+License deed:
+https://creativecommons.org/licenses/by-nc-nd/4.0/
