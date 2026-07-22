@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/svelte";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 
 vi.mock("$app/state", () => ({
@@ -11,6 +11,7 @@ vi.mock("../lib/counterSocket.ts", () => ({ connectCounterSocket }));
 
 import Layout from "./+layout.svelte";
 import { themeState } from "../lib/state.svelte.ts";
+import { consentState } from "../lib/consent/state.svelte.ts";
 
 function children(text = "child content") {
   return createRawSnippet(() => ({
@@ -19,6 +20,12 @@ function children(text = "child content") {
 }
 
 describe("root layout", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    consentState.status = "pending";
+    consentState.categories = { analytics: true, marketing: true };
+  });
+
   it("renders the nav, footer, and slotted page content", () => {
     render(Layout, { props: { children: children() } });
 
@@ -61,5 +68,14 @@ describe("root layout", () => {
 
     expect(themeState.darkMode).toBe(false);
     document.documentElement.removeAttribute("lang");
+  });
+
+  it("opens the cookie preferences modal from the footer's Cookie settings link", async () => {
+    render(Layout, { props: { children: children() } });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Cookie settings" }));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Cookie preferences")).toBeInTheDocument();
   });
 });

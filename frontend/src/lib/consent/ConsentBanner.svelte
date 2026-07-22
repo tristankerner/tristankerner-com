@@ -12,7 +12,7 @@
     initConsent();
   });
 
-  function showPreferences() {
+  export function openPreferences() {
     draftAnalytics = consentState.categories.analytics;
     draftMarketing = consentState.categories.marketing;
     modalOpen = true;
@@ -48,7 +48,7 @@
         <button
           type="button"
           class="underline hover:text-primary-600 dark:hover:text-primary-500"
-          onclick={showPreferences}
+          onclick={openPreferences}
         >
           Customize your preferences
         </button>
@@ -56,19 +56,11 @@
       </p>
       <div class="flex shrink-0 flex-wrap items-center gap-2">
         <Button size="sm" color="alternative" onclick={declineAll}>Decline</Button>
-        <Button size="sm" color="alternative" onclick={showPreferences}>Customize</Button>
+        <Button size="sm" color="alternative" onclick={openPreferences}>Customize</Button>
         <Button size="sm" color="primary" onclick={handleAcceptAll}>Accept All</Button>
       </div>
     </div>
   </div>
-{:else}
-  <button
-    type="button"
-    class="fixed bottom-4 left-4 z-50 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 shadow-md hover:text-primary-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:text-primary-500"
-    onclick={showPreferences}
-  >
-    Cookie settings
-  </button>
 {/if}
 
 <!-- transitionParams duration=0: the default fade outro never resolves on a

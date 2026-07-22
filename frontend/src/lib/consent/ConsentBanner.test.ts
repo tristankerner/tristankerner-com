@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { CONSENT_STORAGE_KEY } from "./config.ts";
 import { consentState } from "./state.svelte.ts";
 import ConsentBanner from "./ConsentBanner.svelte";
@@ -32,7 +33,6 @@ describe("ConsentBanner", () => {
     expect(consentState.status).toBe("decided");
     expect(consentState.categories).toEqual({ analytics: true, marketing: true });
     expect(screen.queryByRole("button", { name: "Accept All" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cookie settings" })).toBeInTheDocument();
     expect(document.head.querySelector("script[src*='googletagmanager.com']")).not.toBeNull();
     expect(document.head.querySelector("script[src*='connect.facebook.net']")).not.toBeNull();
 
@@ -99,11 +99,12 @@ describe("ConsentBanner", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("reopens preferences seeded from a prior decline via the floating Cookie settings button", async () => {
-    render(ConsentBanner);
+  it("exposes openPreferences so callers outside the component (e.g. a footer link) can reopen it, seeded from a prior decline", async () => {
+    const { component } = render(ConsentBanner);
 
     await fireEvent.click(screen.getByRole("button", { name: "Decline" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Cookie settings" }));
+    component.openPreferences();
+    await tick();
 
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByText("Cookie preferences")).toBeInTheDocument();
@@ -122,7 +123,6 @@ describe("ConsentBanner", () => {
 
     expect(consentState.status).toBe("decided");
     expect(screen.queryByRole("button", { name: "Accept All" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cookie settings" })).toBeInTheDocument();
     expect(document.head.querySelector("script[src*='googletagmanager.com']")).not.toBeNull();
   });
 });

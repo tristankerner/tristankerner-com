@@ -14,6 +14,7 @@
 
     let { children } = $props();
     let activeUrl = $derived(page.url.pathname);
+    let consentBanner: ReturnType<typeof ConsentBanner> | undefined;
 
     const updateTheme = () => {
         themeState.darkMode = document.documentElement.classList.contains('dark');
@@ -74,6 +75,11 @@
     <FooterLinkGroup class="mt-3 flex flex-wrap items-center text-sm text-gray-500 sm:mt-0 dark:text-gray-400">
         <FooterLink href="https://www.linkedin.com/in/tristan-kerner-754343135"><LinkedinSolid size="lg"/></FooterLink>
         <FooterLink href="https://github.com/tristankerner"><GithubSolid size="lg"/></FooterLink>
+        <li class="me-4 last:me-0 md:me-6">
+            <button type="button" class="hover:underline" onclick={() => consentBanner?.openPreferences()}>
+                Cookie settings
+            </button>
+        </li>
     </FooterLinkGroup>
 </Footer>
-<ConsentBanner />
+<ConsentBanner bind:this={consentBanner} />
