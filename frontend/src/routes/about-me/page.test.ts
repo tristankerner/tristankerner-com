@@ -27,7 +27,7 @@ describe("about-me page", () => {
     for (const group of skillGroups) {
       expect(screen.getByRole("heading", { name: group.name })).toBeInTheDocument();
       for (const skill of group.skills) {
-        expect(screen.getAllByText(skill).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(skill.name).length).toBeGreaterThan(0);
       }
     }
   });
@@ -68,6 +68,70 @@ describe("about-me page", () => {
         expect(screen.getAllByText(project.name).length).toBeGreaterThan(0);
       }
       expect(screen.getAllByText(project.description).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("does not render a skill, certification, or company as a link when it has no url", () => {
+    render(AboutMePage);
+    for (const group of skillGroups) {
+      for (const skill of group.skills) {
+        if (!skill.url) {
+          expect(screen.queryByRole("link", { name: skill.name })).not.toBeInTheDocument();
+        }
+      }
+    }
+    for (const cert of certifications) {
+      if (!cert.url) {
+        expect(screen.queryByRole("link", { name: cert.name })).not.toBeInTheDocument();
+      }
+    }
+    for (const job of jobs) {
+      if (!job.companyUrl) {
+        expect(screen.queryByRole("link", { name: job.company })).not.toBeInTheDocument();
+      }
+    }
+  });
+
+  it("renders a skill as a link opening in a new tab when it has a url", () => {
+    const [group] = skillGroups;
+    const [skill] = group.skills;
+    const originalUrl = skill.url;
+    skill.url = "https://example.com/skill";
+    try {
+      render(AboutMePage);
+      const link = screen.getByRole("link", { name: skill.name });
+      expect(link).toHaveAttribute("href", "https://example.com/skill");
+      expect(link).toHaveAttribute("target", "_blank");
+    } finally {
+      skill.url = originalUrl;
+    }
+  });
+
+  it("renders a certification as a link opening in a new tab when it has a url", () => {
+    const [cert] = certifications;
+    const originalUrl = cert.url;
+    cert.url = "https://example.com/cert";
+    try {
+      render(AboutMePage);
+      const link = screen.getByRole("link", { name: cert.name });
+      expect(link).toHaveAttribute("href", "https://example.com/cert");
+      expect(link).toHaveAttribute("target", "_blank");
+    } finally {
+      cert.url = originalUrl;
+    }
+  });
+
+  it("renders a company name as a link opening in a new tab when it has a companyUrl", () => {
+    const [job] = jobs;
+    const originalUrl = job.companyUrl;
+    job.companyUrl = "https://example.com/company";
+    try {
+      render(AboutMePage);
+      const link = screen.getByRole("link", { name: job.company });
+      expect(link).toHaveAttribute("href", "https://example.com/company");
+      expect(link).toHaveAttribute("target", "_blank");
+    } finally {
+      job.companyUrl = originalUrl;
     }
   });
 });

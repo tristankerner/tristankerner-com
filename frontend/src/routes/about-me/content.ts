@@ -14,47 +14,118 @@ export const summary =
     "systems using REST/SOAP APIs, webhooks, Python, C#, SQL, and modern iPaaS tooling, partnering closely with Sales, " +
     "Marketing, Product, and executive stakeholders across the EdTech, wine, and fine art industries.";
 
-export type SkillGroup = { name: string; skills: string[] };
+export type Skill = { name: string; url?: string };
+export type SkillGroup = { name: string; skills: Skill[] };
 
 export const skillGroups: SkillGroup[] = [
-    { name: "Languages", skills: ["Python", "Apex", "C#", "SQL", "TypeScript", "JavaScript", "PHP"] },
+    {
+        name: "Languages",
+        skills: [
+            { name: "Python" },
+            { name: "Apex" },
+            { name: "C#" },
+            { name: "SQL" },
+            { name: "TypeScript" },
+            { name: "JavaScript" },
+            { name: "PHP" },
+        ],
+    },
     {
         name: "Integrations",
         skills: [
-            "Salesforce",
-            "Stripe",
-            "Cvent",
-            "SendGrid",
-            "Workato",
-            "Fivetran",
-            "Marketing Cloud",
-            "Sage Intacct",
-            "Drupal",
-            "DocuSign",
-            "HubSpot",
-            "Authorize.net",
-            "NCS",
-            "TaxStatus",
-            "DropBox",
-            "Box",
-            "ShipCompliant",
-            "FedEx",
-            "Beverage Data Network (BDN) / Vermont Information Processing (VIP)",
-            "REST APIs",
-            "SOAP APIs",
-            "GraphQL",
+            { name: "Salesforce" },
+            { name: "Stripe" },
+            { name: "Cvent" },
+            { name: "SendGrid" },
+            { name: "Workato" },
+            { name: "Fivetran" },
+            { name: "Marketing Cloud" },
+            { name: "Sage Intacct" },
+            { name: "Drupal" },
+            { name: "DocuSign" },
+            { name: "HubSpot" },
+            { name: "Authorize.net" },
+            { name: "NCS" },
+            { name: "TaxStatus" },
+            { name: "DropBox" },
+            { name: "Box" },
+            { name: "ShipCompliant" },
+            { name: "FedEx" },
+            { name: "Beverage Data Network (BDN) / Vermont Information Processing (VIP)" },
+            { name: "REST APIs" },
+            { name: "SOAP APIs" },
+            { name: "GraphQL" },
         ],
     },
-    { name: "Data Platforms", skills: ["Databricks", "Delta Lake"] },
-    { name: "Databases & Tools", skills: ["PostgreSQL", "MySQL", "DuckDB", "Git", "Jira", "SFDX CLI", "Force.com Ant Migration Tool", "Postman", "Bruno", "Salesforce Data Loader"] },
-    { name: "Cloud & DevOps", skills: ["AWS", "CI/CD", "GitHub Actions", "CircleCI", "BitBucket Pipelines", "Docker"] },
-    { name: "Backend", skills: [".NET", "ASP.NET Core", "Node.js", "PySpark"] },
-    { name: "Frontend", skills: ["React", "Lightning Web Components", "Visualforce", "Aura Components", "SLDS", "Vue.js", "Svelte", "Tailwind", "HTML", "CSS", "Foundation for Sites", "MJML"] },
-    { name: "Architecture", skills: ["Microservices", "Event-Driven Architecture", "System Design", "API Design", "Integration Architecture", "Observability"] },
-    { name: "Identity & Security", skills: ["Okta", "Keycloak", "SSO", "RBAC", "Access Reviews"] },
+    {
+        name: "Data Platforms",
+        skills: [{ name: "Databricks" }, { name: "Delta Lake" }],
+    },
+    {
+        name: "Databases & Tools",
+        skills: [
+            { name: "PostgreSQL" },
+            { name: "MySQL" },
+            { name: "DuckDB" },
+            { name: "Git" },
+            { name: "Jira" },
+            { name: "SFDX CLI" },
+            { name: "Force.com Ant Migration Tool" },
+            { name: "Postman" },
+            { name: "Bruno" },
+            { name: "Salesforce Data Loader" },
+        ],
+    },
+    {
+        name: "Cloud & DevOps",
+        skills: [
+            { name: "AWS" },
+            { name: "CI/CD" },
+            { name: "GitHub Actions" },
+            { name: "CircleCI" },
+            { name: "BitBucket Pipelines" },
+            { name: "Docker" },
+        ],
+    },
+    {
+        name: "Backend",
+        skills: [{ name: ".NET" }, { name: "ASP.NET Core" }, { name: "Node.js" }, { name: "PySpark" }],
+    },
+    {
+        name: "Frontend",
+        skills: [
+            { name: "React" },
+            { name: "Lightning Web Components" },
+            { name: "Visualforce" },
+            { name: "Aura Components" },
+            { name: "SLDS" },
+            { name: "Vue.js" },
+            { name: "Svelte" },
+            { name: "Tailwind" },
+            { name: "HTML" },
+            { name: "CSS" },
+            { name: "Foundation for Sites" },
+            { name: "MJML" },
+        ],
+    },
+    {
+        name: "Architecture",
+        skills: [
+            { name: "Microservices" },
+            { name: "Event-Driven Architecture" },
+            { name: "System Design" },
+            { name: "API Design" },
+            { name: "Integration Architecture" },
+            { name: "Observability" },
+        ],
+    },
+    {
+        name: "Identity & Security",
+        skills: [{ name: "Okta" }, { name: "Keycloak" }, { name: "SSO" }, { name: "RBAC" }, { name: "Access Reviews" }],
+    },
 ];
 
-export type Certification = { name: string; id: string };
+export type Certification = { name: string; id: string; url?: string };
 
 export const certifications: Certification[] = [
     { name: "Salesforce Certified Platform Developer I", id: "7922219" },
@@ -69,6 +140,7 @@ export type RoleLocation = "On-site" | "Hybrid" | "Remote";
 
 export type Job = {
     company: string;
+    companyUrl?: string;
     companyLocation: string;
     duration: string;
     description: string;

@@ -34,8 +34,8 @@
                             {group.name}
                         </h3>
                         <div class="flex flex-wrap gap-2">
-                            {#each group.skills as skill (skill)}
-                                <Badge color="primary" rounded>{skill}</Badge>
+                            {#each group.skills as skill (skill.name)}
+                                <Badge color="primary" rounded href={skill.url} target="_blank">{skill.name}</Badge>
                             {/each}
                         </div>
                     </div>
@@ -46,7 +46,19 @@
             <ul class="space-y-2">
                 {#each certifications as cert (cert.id)}
                     <li>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">{cert.name}</p>
+                        <p class="font-medium text-gray-700 dark:text-gray-300">
+                            {#if cert.url}
+                                <a
+                                    href={cert.url}
+                                    target="_blank"
+                                    class="text-primary-600 dark:text-primary-500 hover:underline"
+                                >
+                                    {cert.name}
+                                </a>
+                            {:else}
+                                {cert.name}
+                            {/if}
+                        </p>
                         <p class="text-xs text-gray-500 dark:text-gray-400">ID: {cert.id}</p>
                     </li>
                 {/each}
@@ -57,7 +69,14 @@
             <h2 class="mb-4 text-xl font-bold text-gray-900 dark:text-white">Experience</h2>
             <Timeline>
                 {#each jobs as job, i (job.company)}
-                    <TimelineItem title={job.company} date={job.duration} isLast={i === jobs.length - 1}>
+                    <TimelineItem date={job.duration} isLast={i === jobs.length - 1}>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {#if job.companyUrl}
+                                <a href={job.companyUrl} target="_blank" class="hover:underline">{job.company}</a>
+                            {:else}
+                                {job.company}
+                            {/if}
+                        </h3>
                         <p class="mb-2 text-sm text-gray-500 italic dark:text-gray-400">
                             {job.companyLocation} &middot; {job.description}
                         </p>
