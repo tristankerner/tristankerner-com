@@ -65,8 +65,16 @@ jobs:
         working-directory: frontend
         run: bun install --frozen-lockfile
 
+      # Both IDs are public client-side identifiers (they ship in the built
+      # JS regardless), so they're plain repository variables rather than
+      # secrets. Vite only inlines VITE_-prefixed vars that are present at
+      # build time; unset ones fall back to the placeholders in
+      # frontend/src/lib/consent/config.ts.
       - name: Build frontend
         working-directory: frontend
+        env:
+          VITE_GOOGLE_ANALYTICS_ID: ${{ vars.GOOGLE_ANALYTICS_ID }}
+          VITE_FACEBOOK_PIXEL_ID: ${{ vars.FACEBOOK_PIXEL_ID }}
         run: bun run build
 
       - name: Set up Rust
