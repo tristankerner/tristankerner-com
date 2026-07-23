@@ -6,7 +6,15 @@
 @plugin 'flowbite/plugin';
 
 @custom-variant dark (&:where(.dark, .dark *));
-/* ... */
+
+/* Match native form controls, scrollbars, etc. to the active theme - avoids
+   a light-themed scrollbar flashing on an otherwise dark-by-default page. */
+:root {
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
+}
 
 @theme {
   /* Deep Sea palette - https://coolors.co/13293d-006494-247ba0-1b98e0-e8f1f2 */
