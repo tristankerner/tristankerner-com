@@ -4,6 +4,7 @@
     import {themeState, counterState} from "./state.svelte.ts";
     import type {SingleDigit} from "./assets/DigitalDigitSvg/types.ts";
     import DigitalDigitSvg from "$lib/assets/DigitalDigitSvg/DigitalDigitSvg.svelte";
+    import { Tooltip } from "flowbite-svelte";
     interface Props {
         class?: string;
     }
@@ -16,12 +17,12 @@
         counterState.pageCounts.find((p) => p.path === page.url.pathname)?.total_unique_visitors
             ?? homeCount
     );
-    let countStr = $derived([... count.toString()]) as SingleDigit[];
+    let countStr = $derived([...count.toString().padStart(5, '0')]) as SingleDigit[];
 </script>
 <div class="{className}">
-    <div class="flex gap-1/2" aria-label="counter">
+    <div class="flex" aria-label="counter">
     {#each countStr as digit, i (i)}
-        <div class="relative h-6 w-6 overflow-hidden md:h-10 md:w-10">
+        <div class="relative h-6 w-4 overflow-hidden md:h-10 md:w-7">
             {#key digit}
                 <div
                         class="absolute inset-0"
@@ -41,4 +42,5 @@
         </div>
     {/each}
     </div>
+    <Tooltip>A throwback to old-timey website visitor counters.</Tooltip>
 </div>
