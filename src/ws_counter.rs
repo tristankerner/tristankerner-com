@@ -10,7 +10,9 @@ use tokio::sync::watch;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
-const VISITOR_TICK_INTERVAL: Duration = Duration::from_secs(60);
+
+// Used when VISITOR_TICK_INTERVAL_MINUTES is unset or invalid.
+const DEFAULT_VISITOR_TICK_INTERVAL_MINUTES: u64 = 1;
 
 // The counter payload is a few hundred bytes and clients never legitimately send
 // text/binary data, so anything above this is either a bug or abuse.
@@ -67,6 +69,13 @@ impl Drop for SessionSlot {
     fn drop(&mut self) {
         WS_SESSIONS.fetch_sub(1, Ordering::AcqRel);
     }
+}
+
+// The visitor ticker checks this before doing any work, so a quiet site
+// with nobody watching the counter doesn't spend GA4 quota (or even the
+// dev-mode local increment) on updates nobody will see.
+fn has_active_sessions() -> bool {
+    WS_SESSIONS.load(Ordering::Relaxed) > 0
 }
 
 // Browsers always send Origin on WebSocket upgrades, so this blocks other sites
@@ -189,6 +198,18 @@ fn is_production() -> bool {
     std::env::var("APP_ENV").is_ok_and(|value| value == "production")
 }
 
+// How often the ticker wakes up to check for active sessions and, if any
+// exist, refresh the counts. Blank/missing/zero/unparseable all fall back
+// to the default, same convention as GA4_TOP_PAGES_LIMIT in src/ga4.rs.
+fn visitor_tick_interval() -> Duration {
+    let minutes = std::env::var("VISITOR_TICK_INTERVAL_MINUTES")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|&minutes| minutes > 0)
+        .unwrap_or(DEFAULT_VISITOR_TICK_INTERVAL_MINUTES);
+    Duration::from_secs(minutes * 60)
+}
+
 // Turns GA4's (path, total users) pairs into the wire format, preserving
 // their order (top pages first - see src/ga4.rs). Pure and separate from
 // the ticker loop so it's unit-testable without a real GA4 response.
@@ -206,11 +227,19 @@ fn spawn_visitor_ticker(
     tx: watch::Sender<String>,
     mut counters: Vec<PathVisitorCount>,
     ga4_config: Option<Ga4Config>,
+    tick_interval: Duration,
 ) {
     rt::spawn(async move {
-        let mut interval = rt::time::interval(VISITOR_TICK_INTERVAL);
+        let mut interval = rt::time::interval(tick_interval);
         loop {
             interval.tick().await;
+
+            // Nobody's watching the counter right now, so skip the GA4 call
+            // (or the dev-mode increment) and the broadcast entirely - the
+            // next tick will check again.
+            if !has_active_sessions() {
+                continue;
+            }
 
             // `counters` is only ever touched from this task, so no locking is
             // needed in either branch below.
@@ -251,7 +280,12 @@ pub(crate) fn start() -> watch::Sender<String> {
     }
 
     let (tx, _rx) = watch::channel(counters_json(&initial_counters));
-    spawn_visitor_ticker(tx.clone(), initial_counters, ga4_config);
+    spawn_visitor_ticker(
+        tx.clone(),
+        initial_counters,
+        ga4_config,
+        visitor_tick_interval(),
+    );
     tx
 }
 
@@ -312,6 +346,37 @@ mod tests {
         set_env("APP_ENV", "development");
         assert!(!is_production());
         remove_env("APP_ENV");
+    }
+
+    #[test]
+    #[serial(tick_interval_env)]
+    fn visitor_tick_interval_defaults_to_one_minute() {
+        remove_env("VISITOR_TICK_INTERVAL_MINUTES");
+        assert_eq!(visitor_tick_interval(), Duration::from_secs(60));
+    }
+
+    #[test]
+    #[serial(tick_interval_env)]
+    fn visitor_tick_interval_reads_the_env_override() {
+        set_env("VISITOR_TICK_INTERVAL_MINUTES", "5");
+        assert_eq!(visitor_tick_interval(), Duration::from_secs(300));
+        remove_env("VISITOR_TICK_INTERVAL_MINUTES");
+    }
+
+    #[test]
+    #[serial(tick_interval_env)]
+    fn visitor_tick_interval_falls_back_to_one_minute_for_an_invalid_value() {
+        set_env("VISITOR_TICK_INTERVAL_MINUTES", "not-a-number");
+        assert_eq!(visitor_tick_interval(), Duration::from_secs(60));
+        remove_env("VISITOR_TICK_INTERVAL_MINUTES");
+    }
+
+    #[test]
+    #[serial(tick_interval_env)]
+    fn visitor_tick_interval_falls_back_to_one_minute_for_zero() {
+        set_env("VISITOR_TICK_INTERVAL_MINUTES", "0");
+        assert_eq!(visitor_tick_interval(), Duration::from_secs(60));
+        remove_env("VISITOR_TICK_INTERVAL_MINUTES");
     }
 
     #[test]
@@ -415,6 +480,21 @@ mod tests {
         // The budget is usable again once slots are freed.
         let reacquired = SessionSlot::try_acquire().expect("should have room again");
         drop(reacquired);
+    }
+
+    #[test]
+    #[serial(ws_sessions)]
+    fn has_active_sessions_reflects_whether_any_slot_is_held() {
+        // Baseline-relative, like the test above, since WS_SESSIONS is
+        // process-wide.
+        let baseline = WS_SESSIONS.load(Ordering::Relaxed);
+        assert_eq!(has_active_sessions(), baseline > 0);
+
+        let slot = SessionSlot::try_acquire().expect("should have room");
+        assert!(has_active_sessions());
+
+        drop(slot);
+        assert_eq!(has_active_sessions(), baseline > 0);
     }
 
     #[actix_web::test]

@@ -33,6 +33,7 @@ set -euo pipefail
 : "${GA4_CREDENTIALS_STAGED:=}"
 : "${GA4_PROPERTY_ID:=}"
 : "${GA4_TOP_PAGES_LIMIT:=}"
+: "${VISITOR_TICK_INTERVAL_MINUTES:=}"
 
 # DOMAIN, LETSENCRYPT_EMAIL: certbot's `-d`/`--email` for the cert.
 # CLOUDFLARE_API_TOKEN: Cloudflare API Token (not the legacy Global API Key)
@@ -132,6 +133,14 @@ if [ -n "$GA4_CREDENTIALS_STAGED" ] && [ -s "$GA4_CREDENTIALS_STAGED" ] && [ -n 
   fi
 fi
 
+# Independent of the GA4 block above: this also paces the dev-style local
+# increment the ticker falls back to if GA4 isn't configured. Only passed
+# through when set - src/ws_counter.rs already defaults to 1 minute.
+TICK_DOCKER_ARGS=()
+if [ -n "$VISITOR_TICK_INTERVAL_MINUTES" ]; then
+  TICK_DOCKER_ARGS+=(-e VISITOR_TICK_INTERVAL_MINUTES="$VISITOR_TICK_INTERVAL_MINUTES")
+fi
+
 # --- App container -------------------------------------------------------
 # Stops+removes whatever was previously running under this name before
 # starting the new image - an in-place update, not a fresh install - and
@@ -149,6 +158,7 @@ docker run -d \
   -e TLS_CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem" \
   -e TLS_KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem" \
   "${GA4_DOCKER_ARGS[@]}" \
+  "${TICK_DOCKER_ARGS[@]}" \
   -p "$HTTP_PORT:$CONTAINER_PORT" \
   -p "$HTTPS_PORT:$CONTAINER_TLS_PORT" \
   "$IMAGE_NAME:latest"

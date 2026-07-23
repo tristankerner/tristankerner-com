@@ -167,6 +167,10 @@ jobs:
           # GA4_TOP_PAGES_LIMIT: how many of the most-visited pages the GA4
           # report returns (src/ga4.rs defaults to 50 if this is left unset).
           GA4_TOP_PAGES_LIMIT: ${{ vars.GA4_TOP_PAGES_LIMIT }}
+          # VISITOR_TICK_INTERVAL_MINUTES: how often the ticker wakes up to
+          # check for active connections and refresh counts (src/ws_counter.rs
+          # defaults to 1 if this is left unset).
+          VISITOR_TICK_INTERVAL_MINUTES: ${{ vars.VISITOR_TICK_INTERVAL_MINUTES }}
         run: |
           umask 077
           {
@@ -182,6 +186,7 @@ jobs:
             printf 'CONTAINER_TLS_PORT=%s\n' "$CONTAINER_TLS_PORT"
             printf 'GA4_PROPERTY_ID=%s\n' "$GA4_PROPERTY_ID"
             printf 'GA4_TOP_PAGES_LIMIT=%s\n' "$GA4_TOP_PAGES_LIMIT"
+            printf 'VISITOR_TICK_INTERVAL_MINUTES=%s\n' "$VISITOR_TICK_INTERVAL_MINUTES"
           } > deploy.env
 
       # GA4_CREDENTIALS_JSON: full JSON contents of a GCP service-account
