@@ -73,8 +73,8 @@
         </NavUl>
     </Navbar>
 </div>
-<main class="min-h-screen bg-gray-50 p-4 dark:bg-gray-900">
-    <div class="flex float-right items-center justify-center">
+<main class="relative min-h-screen bg-gray-50 p-4 dark:bg-gray-900">
+    <div class="absolute top-4 right-4 z-10 flex items-center justify-center">
         <Counter></Counter>
     </div>
 
