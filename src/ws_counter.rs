@@ -146,7 +146,11 @@ pub(crate) async fn handle(
         let _slot = slot;
 
         let mut last_heartbeat = Instant::now();
-        let mut heartbeat_interval = rt::time::interval(HEARTBEAT_INTERVAL);
+        // `interval` (unlike `interval_at`) fires its first tick immediately, which would
+        // race a real client message on every connection - e.g. sending a spurious ping
+        // right after the client's close frame instead of ever reaching the close branch.
+        let mut heartbeat_interval =
+            rt::time::interval_at(rt::time::Instant::now() + HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL);
 
         if session.text(initial_snapshot).await.is_err() {
             return;
