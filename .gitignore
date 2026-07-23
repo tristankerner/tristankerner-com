@@ -1,6 +1,8 @@
 /target
 .idea
 .env
+scratch.txt
+image.tar.gz
 
 # GCP service-account key(s) for local GA4 testing (see .env.example) -
 # never committed, regardless of where they're placed.

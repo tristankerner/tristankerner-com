@@ -20,7 +20,7 @@ describe("Counter", () => {
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 42 }];
 
     const { container } = render(Counter);
-    expect(digitTitles(container)).toEqual(["Four", "Two"]);
+    expect(digitTitles(container)).toEqual(["Zero", "Zero", "Zero", "Four", "Two"]);
   });
 
   it("uses the count for the current path when present", () => {
@@ -31,7 +31,7 @@ describe("Counter", () => {
     ];
 
     const { container } = render(Counter);
-    expect(digitTitles(container)).toEqual(["Two", "Three"]);
+    expect(digitTitles(container)).toEqual(["Zero", "Zero", "Zero", "Two", "Three"]);
   });
 
   it("falls back to the home page count when the current path has no entry", () => {
@@ -39,7 +39,7 @@ describe("Counter", () => {
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 7 }];
 
     const { container } = render(Counter);
-    expect(digitTitles(container)).toEqual(["Seven"]);
+    expect(digitTitles(container)).toEqual(["Zero", "Zero", "Zero", "Zero", "Seven"]);
   });
 
   it("defaults to 0 when there is no home count either", () => {
@@ -47,7 +47,7 @@ describe("Counter", () => {
     counterState.pageCounts = [];
 
     const { container } = render(Counter);
-    expect(digitTitles(container)).toEqual(["Zero"]);
+    expect(digitTitles(container)).toEqual(["Zero", "Zero", "Zero", "Zero", "Zero"]);
   });
 
   it("uses light colors when not in dark mode", () => {
@@ -83,7 +83,7 @@ describe("Counter", () => {
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 1 }];
 
     const { container } = render(Counter);
-    expect(digitTitles(container)).toEqual(["One"]);
+    expect(digitTitles(container)).toEqual(["Zero", "Zero", "Zero", "Zero", "One"]);
 
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 2 }];
     await tick();
