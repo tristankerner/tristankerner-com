@@ -71,9 +71,7 @@ impl Drop for SessionSlot {
 // Browsers always send Origin on WebSocket upgrades, so this blocks other sites
 // from opening sockets against us (cross-site WebSocket hijacking / resource
 // abuse). Requests without an Origin (curl, monitoring) are allowed — the data
-// is public and non-browser clients aren't confused deputies. NOTE: any reverse
-// proxy in front must forward the original Host header (nginx:
-// `proxy_set_header Host $host;`) or browser upgrades will be rejected here.
+// is public and non-browser clients aren't confused deputies.
 fn same_origin(req: &HttpRequest) -> bool {
     let Some(origin) = req.headers().get(header::ORIGIN) else {
         return true;
