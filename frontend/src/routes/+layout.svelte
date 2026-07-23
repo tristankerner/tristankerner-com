@@ -2,7 +2,9 @@
     import {themeState} from "../lib/state.svelte.ts";
     import { connectCounterSocket } from "../lib/counterSocket.ts";
     import { onMount } from 'svelte';
+    import { afterNavigate } from '$app/navigation';
     import { page } from "$app/state";
+    import { trackPageView } from "$lib/consent/analytics.ts";
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
     import logo from '$lib/assets/logo.svg';
@@ -35,6 +37,14 @@
         darkModeObserver.observe(document.documentElement, {
             attributes: true,
         });
+    });
+
+    // 'enter' is the initial load, already covered by each tracker's own
+    // auto-fired pageview when its script loads (see analytics.ts); every
+    // later client-side navigation needs reporting explicitly.
+    afterNavigate((navigation) => {
+        if (navigation.type === 'enter') return;
+        trackPageView(page.url.pathname + page.url.search);
     });
 </script>
 

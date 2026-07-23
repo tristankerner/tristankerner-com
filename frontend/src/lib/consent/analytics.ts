@@ -40,8 +40,12 @@ function loadGoogleAnalytics() {
   gtag("config", GOOGLE_ANALYTICS_ID);
 }
 
-// Standard Meta Pixel bootstrap snippet, adapted for TypeScript.
+// Standard Meta Pixel bootstrap snippet, adapted for TypeScript. No-ops when
+// FACEBOOK_PIXEL_ID isn't configured (unset or blank) - there's nothing
+// useful to load yet, and initializing fbevents.js with no real ID just logs
+// an "Invalid PixelID" warning and tracks nothing.
 function loadFacebookPixel() {
+  if (!FACEBOOK_PIXEL_ID) return;
   if (document.getElementById(PIXEL_SCRIPT_ID)) return;
 
   const fbq: FbqFn = ((...args: unknown[]) => {
@@ -70,4 +74,19 @@ function loadFacebookPixel() {
 export function applyConsent(categories: ConsentCategories) {
   if (categories.analytics) loadGoogleAnalytics();
   if (categories.marketing) loadFacebookPixel();
+}
+
+// SvelteKit's client-side router updates the URL via the History API instead
+// of a full page load, so neither tracker's own auto-fired pageview (gtag's
+// initial `config` call, fbq's initial `track PageView` call) ever sees
+// subsequent in-app navigations. Call this after every client-side route
+// change to report them explicitly; harmless no-op for whichever tracker
+// hasn't been loaded (consent not granted, or not yet applied).
+export function trackPageView(path: string) {
+  window.gtag?.("event", "page_view", {
+    page_path: path,
+    page_location: window.location.href,
+    page_title: document.title,
+  });
+  window.fbq?.("track", "PageView");
 }

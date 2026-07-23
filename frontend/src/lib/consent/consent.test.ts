@@ -1,4 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// FACEBOOK_PIXEL_ID has no placeholder fallback (see config.ts), so a real
+// value is stubbed here to exercise the normal "pixel loads" path - the
+// "no ID configured" case is covered directly in analytics.test.ts.
+vi.mock("./config.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./config.ts")>()),
+  FACEBOOK_PIXEL_ID: "123456789012345",
+}));
+
 import { CONSENT_STORAGE_KEY } from "./config.ts";
 import { consentState } from "./state.svelte.ts";
 import { acceptAll, declineAll, initConsent, savePreferences } from "./consent.ts";
