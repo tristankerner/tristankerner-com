@@ -1,7 +1,9 @@
+use crate::store::{ShortTermVisit, VisitorTracker};
+use crate::visitor_key;
 use actix_files::NamedFile;
 use actix_web::http::Method;
 use actix_web::http::header::{self, ContentEncoding, HeaderValue};
-use actix_web::{HttpRequest, HttpResponse, Result};
+use actix_web::{HttpRequest, HttpResponse, Result, web};
 use std::path::{Path, PathBuf};
 
 #[cfg(not(test))]
@@ -101,7 +103,10 @@ fn precompressed_variant(
     None
 }
 
-pub(crate) async fn serve(req: HttpRequest) -> Result<HttpResponse> {
+pub(crate) async fn serve(
+    req: HttpRequest,
+    tracker: web::Data<VisitorTracker>,
+) -> Result<HttpResponse> {
     if !matches!(*req.method(), Method::GET | Method::HEAD) {
         return Ok(HttpResponse::MethodNotAllowed()
             .insert_header((header::ALLOW, "GET, HEAD"))
@@ -151,7 +156,37 @@ pub(crate) async fn serve(req: HttpRequest) -> Result<HttpResponse> {
         header::CACHE_CONTROL,
         HeaderValue::from_static(cache_control),
     );
+
+    record_page_view(&req, is_html, &tracker);
     Ok(res)
+}
+
+// Only counts genuine page loads (an HTML response to a real GET), not
+// HEAD requests or the JS/CSS/image/font sub-resource requests a page load
+// also triggers. Cheap and non-blocking: HMAC computation is pure CPU work
+// (microseconds) and `try_send` never waits on I/O - the actual database
+// write happens later, off this request path entirely (see
+// store::spawn_writer). Silently does nothing without a peer address
+// (e.g. some test setups), since there's no visitor to key on.
+fn record_page_view(req: &HttpRequest, is_html: bool, tracker: &VisitorTracker) {
+    if !is_html || *req.method() != Method::GET {
+        return;
+    }
+    let Some(ip) = visitor_key::client_ip(req) else {
+        return;
+    };
+
+    let user_agent = visitor_key::user_agent(req);
+    let day = chrono::Utc::now().date_naive();
+    let visitor_key = visitor_key::derive(&tracker.hash_secret, &ip, user_agent, day);
+
+    // A full queue or a closed writer just means this one visit is
+    // dropped - never a slower or failed page response.
+    let _ = tracker.sender.try_send(ShortTermVisit {
+        day,
+        path: req.path().to_string(),
+        visitor_key,
+    });
 }
 
 #[cfg(test)]
@@ -160,6 +195,20 @@ mod tests {
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use std::fs;
+    use std::net::SocketAddr;
+
+    fn test_tracker() -> web::Data<VisitorTracker> {
+        let (sender, _rx) = tokio::sync::mpsc::channel(8);
+        web::Data::new(VisitorTracker {
+            sender,
+            hash_secret: std::sync::Arc::new(vec![0u8; 32]),
+        })
+    }
+
+    fn with_peer_addr(builder: TestRequest) -> TestRequest {
+        let addr: SocketAddr = "203.0.113.1:12345".parse().unwrap();
+        builder.peer_addr(addr)
+    }
 
     #[test]
     fn sanitized_rel_path_rejects_the_root() {
@@ -169,7 +218,10 @@ mod tests {
 
     #[test]
     fn sanitized_rel_path_accepts_a_simple_path() {
-        assert_eq!(sanitized_rel_path("/about-me"), Some(PathBuf::from("about-me")));
+        assert_eq!(
+            sanitized_rel_path("/about-me"),
+            Some(PathBuf::from("about-me"))
+        );
     }
 
     #[test]
@@ -182,7 +234,10 @@ mod tests {
 
     #[test]
     fn sanitized_rel_path_trims_a_trailing_slash() {
-        assert_eq!(sanitized_rel_path("/about-me/"), Some(PathBuf::from("about-me")));
+        assert_eq!(
+            sanitized_rel_path("/about-me/"),
+            Some(PathBuf::from("about-me"))
+        );
     }
 
     #[test]
@@ -328,7 +383,7 @@ mod tests {
     #[actix_web::test]
     async fn serve_rejects_non_get_head_methods() {
         let req = TestRequest::post().uri("/").to_http_request();
-        let res = serve(req).await.unwrap();
+        let res = serve(req, test_tracker()).await.unwrap();
         assert_eq!(res.status(), StatusCode::METHOD_NOT_ALLOWED);
         assert_eq!(res.headers().get(header::ALLOW).unwrap(), "GET, HEAD");
     }
@@ -336,26 +391,40 @@ mod tests {
     #[actix_web::test]
     async fn serve_returns_the_fixture_index_page() {
         let req = TestRequest::get().uri("/").to_http_request();
-        let res = serve(req).await.unwrap();
+        let res = serve(req, test_tracker()).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
-        assert_eq!(res.headers().get(header::CACHE_CONTROL).unwrap(), "no-cache");
-        assert_eq!(res.headers().get(header::CONTENT_TYPE).unwrap(), "text/html; charset=utf-8");
+        assert_eq!(
+            res.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-cache"
+        );
+        assert_eq!(
+            res.headers().get(header::CONTENT_TYPE).unwrap(),
+            "text/html; charset=utf-8"
+        );
     }
 
     #[actix_web::test]
     async fn serve_returns_a_prerendered_page_for_a_known_route() {
         let req = TestRequest::get().uri("/about-me").to_http_request();
-        let res = serve(req).await.unwrap();
+        let res = serve(req, test_tracker()).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
-        assert_eq!(res.headers().get(header::CONTENT_TYPE).unwrap(), "text/html; charset=utf-8");
+        assert_eq!(
+            res.headers().get(header::CONTENT_TYPE).unwrap(),
+            "text/html; charset=utf-8"
+        );
     }
 
     #[actix_web::test]
     async fn serve_falls_back_to_the_spa_shell_for_an_unknown_route() {
-        let req = TestRequest::get().uri("/totally/unknown/route").to_http_request();
-        let res = serve(req).await.unwrap();
+        let req = TestRequest::get()
+            .uri("/totally/unknown/route")
+            .to_http_request();
+        let res = serve(req, test_tracker()).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
-        assert_eq!(res.headers().get(header::CACHE_CONTROL).unwrap(), "no-cache");
+        assert_eq!(
+            res.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-cache"
+        );
     }
 
     #[actix_web::test]
@@ -363,7 +432,7 @@ mod tests {
         let req = TestRequest::get()
             .uri("/_app/immutable/chunk.js")
             .to_http_request();
-        let res = serve(req).await.unwrap();
+        let res = serve(req, test_tracker()).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         assert_eq!(
             res.headers().get(header::CACHE_CONTROL).unwrap(),
@@ -374,7 +443,7 @@ mod tests {
     #[actix_web::test]
     async fn serve_uses_a_short_cache_for_a_plain_asset() {
         let req = TestRequest::get().uri("/robots.txt").to_http_request();
-        let res = serve(req).await.unwrap();
+        let res = serve(req, test_tracker()).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         assert_eq!(
             res.headers().get(header::CACHE_CONTROL).unwrap(),
@@ -389,11 +458,14 @@ mod tests {
             .uri("/robots.txt")
             .insert_header((header::ACCEPT_ENCODING, "gzip, br"))
             .to_http_request();
-        let res = serve(req).await.unwrap();
+        let res = serve(req, test_tracker()).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         assert_eq!(res.headers().get(header::CONTENT_ENCODING).unwrap(), "br");
         // Content type must reflect the original file, not the .br variant.
-        assert_eq!(res.headers().get(header::CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
+        assert_eq!(
+            res.headers().get(header::CONTENT_TYPE).unwrap(),
+            "text/plain; charset=utf-8"
+        );
         assert_eq!(res.headers().get(header::VARY).unwrap(), "accept-encoding");
     }
 
@@ -403,7 +475,60 @@ mod tests {
             .uri("/robots.txt")
             .insert_header((header::ACCEPT_ENCODING, "gzip"))
             .to_http_request();
-        let res = serve(req).await.unwrap();
+        let res = serve(req, test_tracker()).await.unwrap();
         assert_eq!(res.headers().get(header::CONTENT_ENCODING).unwrap(), "gzip");
+    }
+
+    fn tracker_with_receiver() -> (VisitorTracker, tokio::sync::mpsc::Receiver<ShortTermVisit>) {
+        let (sender, rx) = tokio::sync::mpsc::channel(8);
+        (
+            VisitorTracker {
+                sender,
+                hash_secret: std::sync::Arc::new(vec![0u8; 32]),
+            },
+            rx,
+        )
+    }
+
+    #[test]
+    fn record_page_view_sends_an_event_for_an_html_get_with_a_known_peer() {
+        let (tracker, mut rx) = tracker_with_receiver();
+        let req = with_peer_addr(TestRequest::get().uri("/about-me")).to_http_request();
+
+        record_page_view(&req, true, &tracker);
+
+        let event = rx.try_recv().expect("expected a recorded visit");
+        assert_eq!(event.path, "/about-me");
+    }
+
+    #[test]
+    fn record_page_view_does_nothing_for_a_non_html_response() {
+        let (tracker, mut rx) = tracker_with_receiver();
+        let req = with_peer_addr(TestRequest::get().uri("/robots.txt")).to_http_request();
+
+        record_page_view(&req, false, &tracker);
+
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn record_page_view_does_nothing_for_a_head_request() {
+        let (tracker, mut rx) = tracker_with_receiver();
+        let req =
+            with_peer_addr(TestRequest::default().method(Method::HEAD).uri("/")).to_http_request();
+
+        record_page_view(&req, true, &tracker);
+
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn record_page_view_does_nothing_without_a_peer_address() {
+        let (tracker, mut rx) = tracker_with_receiver();
+        let req = TestRequest::get().uri("/").to_http_request();
+
+        record_page_view(&req, true, &tracker);
+
+        assert!(rx.try_recv().is_err());
     }
 }

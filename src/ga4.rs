@@ -1,7 +1,14 @@
+use chrono::NaiveDate;
 use gcp_auth::{CustomServiceAccount, TokenProvider};
 use google_analytics_api_ga4::types::{DateRange, Dimension, Metric, OrderBy, RunReportResponse};
 use google_analytics_api_ga4::{AnalyticsDataApi, GoogleApiError, RunReportRequest};
 use std::fmt;
+
+// Row cap per daily-report API call; fetch_daily_page_visitors pages past
+// this via `offset` rather than treating it as a hard limit on how much
+// history can be fetched (a year of daily-per-page rows can exceed a
+// single page).
+const DAILY_QUERY_PAGE_SIZE: u32 = 10_000;
 
 const ANALYTICS_READONLY_SCOPE: &str = "https://www.googleapis.com/auth/analytics.readonly";
 
@@ -83,6 +90,57 @@ fn report_request(property_id: &str, limit: u32) -> RunReportRequest {
     }
 }
 
+// One row per (date, path) over the range, unordered and uncapped (beyond
+// pagination) - unlike `report_request`, this isn't limited to a top-N
+// display set, since it's meant to persist full history.
+fn daily_report_request(
+    property_id: &str,
+    start: NaiveDate,
+    end: NaiveDate,
+    offset: u32,
+    limit: u32,
+) -> RunReportRequest {
+    RunReportRequest {
+        property: format!("properties/{property_id}"),
+        dimensions: Dimension::from_string_vec(vec!["date", "pagePath"]),
+        metrics: Metric::from_string_vec(vec!["totalUsers"]),
+        date_ranges: vec![DateRange::new(
+            "range",
+            &start.to_string(),
+            &end.to_string(),
+        )],
+        offset: Some(offset.to_string()),
+        limit: Some(limit.to_string()),
+        ..RunReportRequest::default()
+    }
+}
+
+// GA4's `date` dimension comes back as `YYYYMMDD` (no separators) - a
+// well-known API quirk, distinct from the `YYYY-MM-DD` format dates are
+// *sent* in (see `DateRange`/`report_request`).
+fn daily_rows_from_response(response: &RunReportResponse) -> Vec<(NaiveDate, String, u64)> {
+    response
+        .rows
+        .iter()
+        .flatten()
+        .filter_map(|row| {
+            let dimensions = row.dimension_values.as_ref()?;
+            let date = dimensions
+                .first()
+                .and_then(|value| value.value.as_deref())
+                .and_then(|value| NaiveDate::parse_from_str(value, "%Y%m%d").ok())?;
+            let path = dimensions.get(1).and_then(|value| value.value.clone())?;
+            let total = row
+                .metric_values
+                .as_ref()
+                .and_then(|values| values.first())
+                .and_then(|value| value.value.as_ref())
+                .and_then(|value| value.parse::<u64>().ok())?;
+            Some((date, path, total))
+        })
+        .collect()
+}
+
 // Maps GA4's row-based response into (path, total users) pairs, preserving
 // the response's order (already sorted by totalUsers descending, per
 // `report_request`'s order_bys). Rows with a missing/unparseable dimension
@@ -109,13 +167,13 @@ fn top_pages_from_response(response: &RunReportResponse) -> Vec<(String, u64)> {
         .collect()
 }
 
-// The only function in this module that touches the network: loads the
-// service-account key, exchanges it for a bearer token, then runs the
-// report. Not covered by tests past the auth step (that would need live GA4
-// credentials); the request/response shaping around it is (`report_request`,
-// `top_pages_from_response`), and the auth failure path is exercised with a
-// nonexistent credentials file.
-pub(crate) async fn fetch_top_pages(config: &Ga4Config) -> Result<Vec<(String, u64)>, Ga4Error> {
+// Authenticates and runs a single `runReport` call. Both public fetch
+// functions below share this; kept private since callers only need the
+// parsed rows, not a raw token/response.
+async fn run_report(
+    config: &Ga4Config,
+    request: RunReportRequest,
+) -> Result<RunReportResponse, Ga4Error> {
     let service_account =
         CustomServiceAccount::from_file(&config.credentials_path).map_err(Ga4Error::Auth)?;
     let token = service_account
@@ -123,12 +181,54 @@ pub(crate) async fn fetch_top_pages(config: &Ga4Config) -> Result<Vec<(String, u
         .await
         .map_err(Ga4Error::Auth)?;
 
-    let request = report_request(&config.property_id, config.top_pages_limit);
-    let response = AnalyticsDataApi::run_report(token.as_str(), &config.property_id, request)
+    AnalyticsDataApi::run_report(token.as_str(), &config.property_id, request)
         .await
-        .map_err(Ga4Error::Api)?;
+        .map_err(Ga4Error::Api)
+}
 
+// The single source of truth for lifetime-distinct visitors: one all-time
+// date range, correctly deduplicated by GA4 itself. Not covered by tests
+// past the auth step (that would need live GA4 credentials); the request/
+// response shaping around it is (`report_request`, `top_pages_from_response`),
+// and the auth failure path is exercised with a nonexistent credentials file.
+pub(crate) async fn fetch_all_time_visitor_totals(
+    config: &Ga4Config,
+) -> Result<Vec<(String, u64)>, Ga4Error> {
+    let request = report_request(&config.property_id, config.top_pages_limit);
+    let response = run_report(config, request).await?;
     Ok(top_pages_from_response(&response))
+}
+
+// Incremental daily breakdown: one row per (date, path) in `[start, end]`,
+// used to backfill/catch up the ga4_daily_visitors table. GA4 caps rows per
+// call, so this pages through with `offset` until a page comes back
+// short of a full page.
+pub(crate) async fn fetch_daily_page_visitors(
+    config: &Ga4Config,
+    start: NaiveDate,
+    end: NaiveDate,
+) -> Result<Vec<(NaiveDate, String, u64)>, Ga4Error> {
+    let mut rows = Vec::new();
+    let mut offset = 0u32;
+    loop {
+        let request = daily_report_request(
+            &config.property_id,
+            start,
+            end,
+            offset,
+            DAILY_QUERY_PAGE_SIZE,
+        );
+        let response = run_report(config, request).await?;
+        let page = daily_rows_from_response(&response);
+        let page_len = page.len();
+        rows.extend(page);
+
+        if page_len < DAILY_QUERY_PAGE_SIZE as usize {
+            break;
+        }
+        offset += DAILY_QUERY_PAGE_SIZE;
+    }
+    Ok(rows)
 }
 
 #[cfg(test)]
@@ -318,16 +418,114 @@ mod tests {
         );
     }
 
-    #[actix_web::test]
-    async fn fetch_top_pages_fails_when_the_credentials_file_does_not_exist() {
-        let config = Ga4Config {
+    fn unreachable_config() -> Ga4Config {
+        Ga4Config {
             credentials_path: "/nonexistent/ga4-credentials.json".to_string(),
             property_id: "123456789".to_string(),
             top_pages_limit: 50,
+        }
+    }
+
+    #[actix_web::test]
+    async fn fetch_all_time_visitor_totals_fails_when_the_credentials_file_does_not_exist() {
+        let result = fetch_all_time_visitor_totals(&unreachable_config()).await;
+        assert!(matches!(result, Err(Ga4Error::Auth(_))));
+    }
+
+    #[actix_web::test]
+    async fn fetch_daily_page_visitors_fails_when_the_credentials_file_does_not_exist() {
+        let start = NaiveDate::parse_from_str("2026-01-01", "%Y-%m-%d").unwrap();
+        let end = NaiveDate::parse_from_str("2026-01-31", "%Y-%m-%d").unwrap();
+
+        let result = fetch_daily_page_visitors(&unreachable_config(), start, end).await;
+        assert!(matches!(result, Err(Ga4Error::Auth(_))));
+    }
+
+    #[test]
+    fn daily_report_request_dimensions_by_date_and_page_with_no_top_n_limit() {
+        let start = NaiveDate::parse_from_str("2026-01-01", "%Y-%m-%d").unwrap();
+        let end = NaiveDate::parse_from_str("2026-01-31", "%Y-%m-%d").unwrap();
+        let request = daily_report_request("123456789", start, end, 20_000, 10_000);
+
+        assert_eq!(
+            serde_json::to_string(&request).unwrap(),
+            concat!(
+                r#"{"property":"properties/123456789","dimensions":[{"name":"date"},{"name":"pagePath"}],"#,
+                r#""metrics":[{"name":"totalUsers"}],"#,
+                r#""dateRanges":[{"startDate":"2026-01-01","endDate":"2026-01-31","name":"range"}],"#,
+                r#""offset":"20000","limit":"10000"}"#,
+            )
+        );
+    }
+
+    fn daily_row(date: &str, path: &str, total_users: &str) -> Row {
+        Row {
+            dimension_values: Some(vec![
+                DimensionValue {
+                    value: Some(date.to_string()),
+                },
+                DimensionValue {
+                    value: Some(path.to_string()),
+                },
+            ]),
+            metric_values: Some(vec![MetricValue {
+                value: Some(total_users.to_string()),
+            }]),
+        }
+    }
+
+    #[test]
+    fn daily_rows_from_response_parses_the_yyyymmdd_date_format() {
+        let response = RunReportResponse {
+            rows: Some(vec![daily_row("20260115", "/", "3")]),
+            ..RunReportResponse::default()
         };
 
-        let result = fetch_top_pages(&config).await;
-        assert!(matches!(result, Err(Ga4Error::Auth(_))));
+        assert_eq!(
+            daily_rows_from_response(&response),
+            vec![(
+                NaiveDate::parse_from_str("2026-01-15", "%Y-%m-%d").unwrap(),
+                "/".to_string(),
+                3
+            )]
+        );
+    }
+
+    #[test]
+    fn daily_rows_from_response_skips_a_row_with_an_unparseable_date() {
+        let response = RunReportResponse {
+            rows: Some(vec![
+                daily_row("not-a-date", "/", "3"),
+                daily_row("20260115", "/about-me", "7"),
+            ]),
+            ..RunReportResponse::default()
+        };
+
+        assert_eq!(
+            daily_rows_from_response(&response),
+            vec![(
+                NaiveDate::parse_from_str("2026-01-15", "%Y-%m-%d").unwrap(),
+                "/about-me".to_string(),
+                7
+            )]
+        );
+    }
+
+    #[test]
+    fn daily_rows_from_response_skips_a_row_missing_the_path_dimension() {
+        let response = RunReportResponse {
+            rows: Some(vec![Row {
+                dimension_values: Some(vec![DimensionValue {
+                    value: Some("20260115".to_string()),
+                }]),
+                metric_values: Some(vec![MetricValue {
+                    value: Some("3".to_string()),
+                }]),
+            }]),
+            ..RunReportResponse::default()
+        };
+
+        assert!(daily_rows_from_response(&response).is_empty());
     }
 
     #[test]

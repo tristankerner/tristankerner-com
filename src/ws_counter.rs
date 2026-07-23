@@ -1,9 +1,13 @@
 use crate::ga4::{self, Ga4Config};
+use crate::store;
 use actix_web::http::header;
 use actix_web::{Error, HttpRequest, HttpResponse, Result, rt, web};
 use actix_ws::AggregatedMessage;
+use chrono::NaiveDate;
 use futures_util::StreamExt as _;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::watch;
@@ -23,11 +27,15 @@ const MAX_WS_MESSAGE_SIZE: usize = 1024;
 // a watch receiver, so the cap is about resource ceiling, not throughput.
 const MAX_WS_SESSIONS: usize = 256;
 
-// Only used for the dev/test fallback ticker (see `spawn_visitor_ticker`)
-// and the state served before the first tick; in production the page list
-// itself comes from GA4 (top pages by traffic - see src/ga4.rs), not from
-// a fixed set tracked here.
-const SEED_PATHS: &[&str] = &["/", "/about-me"];
+// How far back to backfill ga4_daily_visitors the first time the daily sync
+// runs against an empty table.
+const BACKFILL_DAYS: i64 = 365;
+
+// How often the daily GA4 sync task wakes up to check whether it's caught
+// up. It fires immediately on startup and then on this cadence; exact wall
+// clock timing isn't important since GA4's own data already lags by hours
+// (see the design discussion this followed).
+const DAILY_SYNC_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Serialize)]
 struct PathVisitorCount {
@@ -190,17 +198,19 @@ pub(crate) async fn handle(
     Ok(response)
 }
 
-// Querying GA4 costs quota and needs a service-account key, so it only ever
-// happens in production (APP_ENV=production). Any other value - including
-// unset, which covers local dev and the test suite - keeps the ticker on
-// its local-increment fallback below.
+// Querying GA4 costs quota and needs a service-account key, so the daily
+// sync only ever runs in production (APP_ENV=production). Any other value
+// - including unset, which covers local dev and the test suite - leaves
+// the long-term tables empty; the combined ticker below still runs
+// regardless, showing whatever the self-tracked short-term data has.
 fn is_production() -> bool {
     std::env::var("APP_ENV").is_ok_and(|value| value == "production")
 }
 
 // How often the ticker wakes up to check for active sessions and, if any
-// exist, refresh the counts. Blank/missing/zero/unparseable all fall back
-// to the default, same convention as GA4_TOP_PAGES_LIMIT in src/ga4.rs.
+// exist, recompute and broadcast the combined total. Blank/missing/zero/
+// unparseable all fall back to the default, same convention as
+// GA4_TOP_PAGES_LIMIT in src/ga4.rs.
 fn visitor_tick_interval() -> Duration {
     let minutes = std::env::var("VISITOR_TICK_INTERVAL_MINUTES")
         .ok()
@@ -210,82 +220,175 @@ fn visitor_tick_interval() -> Duration {
     Duration::from_secs(minutes * 60)
 }
 
-// Turns GA4's (path, total users) pairs into the wire format, preserving
-// their order (top pages first - see src/ga4.rs). Pure and separate from
-// the ticker loop so it's unit-testable without a real GA4 response.
-fn counters_from_top_pages(top_pages: Vec<(String, u64)>) -> Vec<PathVisitorCount> {
-    top_pages
+// Merges the two sources into one per-page total: GA4's own lifetime-
+// distinct count (correctly deduplicated server-side) plus this site's own
+// self-tracked count of visits since the long-term data was last synced
+// (see src/store.rs). A page that only appears in one side (e.g. brand new,
+// not yet in a GA4 sync) still shows up, starting from whichever side has
+// it. Sorted by path for deterministic output. Pure, so it's unit-testable
+// without a database.
+fn combine_totals(
+    all_time: HashMap<String, u64>,
+    short_term: HashMap<String, u64>,
+) -> Vec<PathVisitorCount> {
+    let mut combined = all_time;
+    for (path, count) in short_term {
+        *combined.entry(path).or_insert(0) += count;
+    }
+
+    let mut counters: Vec<PathVisitorCount> = combined
         .into_iter()
         .map(|(path, total_unique_visitors)| PathVisitorCount {
             path,
             total_unique_visitors,
         })
-        .collect()
+        .collect();
+    counters.sort_by(|a, b| a.path.cmp(&b.path));
+    counters
 }
 
-fn spawn_visitor_ticker(
-    tx: watch::Sender<String>,
-    mut counters: Vec<PathVisitorCount>,
-    ga4_config: Option<Ga4Config>,
-    tick_interval: Duration,
-) {
+fn spawn_combined_ticker(tx: watch::Sender<String>, db_path: PathBuf, tick_interval: Duration) {
     rt::spawn(async move {
         let mut interval = rt::time::interval(tick_interval);
         loop {
             interval.tick().await;
 
-            // Nobody's watching the counter right now, so skip the GA4 call
-            // (or the dev-mode increment) and the broadcast entirely - the
-            // next tick will check again.
+            // Nobody's watching the counter right now, so skip the database
+            // read and the broadcast entirely - the next tick checks again.
             if !has_active_sessions() {
                 continue;
             }
 
-            // `counters` is only ever touched from this task, so no locking is
-            // needed in either branch below.
-            match &ga4_config {
-                Some(config) => match ga4::fetch_top_pages(config).await {
-                    Ok(top_pages) => counters = counters_from_top_pages(top_pages),
-                    Err(e) => eprintln!("visitor ticker: failed to fetch GA4 top pages: {e}"),
-                },
-                // Dev/test fallback: no GA4 credentials are required locally,
-                // so simulate traffic by incrementing every path each tick.
-                None => {
-                    for counter in counters.iter_mut() {
-                        counter.total_unique_visitors += 1;
-                    }
+            match read_combined_totals(db_path.clone()).await {
+                Ok((all_time, short_term)) => {
+                    let counters = combine_totals(all_time, short_term);
+                    let _ = tx.send(counters_json(&counters));
                 }
+                Err(e) => eprintln!("visitor ticker: failed to read combined totals: {e}"),
             }
-
-            let _ = tx.send(counters_json(&counters));
         }
     });
 }
 
-pub(crate) fn start() -> watch::Sender<String> {
-    let initial_counters: Vec<PathVisitorCount> = SEED_PATHS
-        .iter()
-        .map(|path| PathVisitorCount {
-            path: (*path).to_string(),
-            total_unique_visitors: 0,
-        })
-        .collect();
+// rusqlite is synchronous, so every database access here runs inside
+// spawn_blocking rather than on the async executor thread.
+async fn read_combined_totals(
+    db_path: PathBuf,
+) -> Result<(HashMap<String, u64>, HashMap<String, u64>), store::StoreError> {
+    tokio::task::spawn_blocking(move || {
+        let conn = store::open(&db_path)?;
+        let all_time = store::all_time_totals(&conn)?;
+        let watermark = store::max_daily_date(&conn)?;
+        let short_term = store::short_term_totals_since(&conn, watermark)?;
+        Ok((all_time, short_term))
+    })
+    .await
+    .expect("read_combined_totals: blocking task panicked")
+}
 
-    let ga4_config = is_production().then(Ga4Config::from_env).flatten();
-    if is_production() && ga4_config.is_none() {
-        eprintln!(
-            "visitor ticker: APP_ENV=production but GOOGLE_APPLICATION_CREDENTIALS/GA4_PROPERTY_ID \
-             are not both set; visitor counts will not update"
-        );
+#[derive(Debug)]
+enum DailySyncError {
+    Store(store::StoreError),
+    Ga4(ga4::Ga4Error),
+}
+
+impl std::fmt::Display for DailySyncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DailySyncError::Store(e) => write!(f, "{e}"),
+            DailySyncError::Ga4(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl From<store::StoreError> for DailySyncError {
+    fn from(e: store::StoreError) -> Self {
+        DailySyncError::Store(e)
+    }
+}
+
+// Given today's watermark (the latest date already in ga4_daily_visitors)
+// and yesterday's date, decides what range to fetch next: a full backfill
+// if there's no watermark yet, otherwise just the days since it. Returns
+// None once already caught up (e.g. the daily sync already ran today).
+// Pure so the backfill-vs-incremental decision is unit-testable without a
+// database or network call.
+fn next_sync_range(
+    watermark: Option<NaiveDate>,
+    yesterday: NaiveDate,
+) -> Option<(NaiveDate, NaiveDate)> {
+    let backfill_start = yesterday - chrono::Duration::days(BACKFILL_DAYS - 1);
+    let start = watermark
+        .map(|d| d + chrono::Duration::days(1))
+        .unwrap_or(backfill_start);
+
+    (start <= yesterday).then_some((start, yesterday))
+}
+
+fn spawn_ga4_daily_sync(db_path: PathBuf, config: Ga4Config) {
+    rt::spawn(async move {
+        let mut interval = rt::time::interval(DAILY_SYNC_INTERVAL);
+        loop {
+            interval.tick().await;
+            if let Err(e) = run_daily_sync(&db_path, &config).await {
+                eprintln!("visitor ticker: GA4 daily sync failed: {e}");
+            }
+        }
+    });
+}
+
+async fn run_daily_sync(db_path: &Path, config: &Ga4Config) -> Result<(), DailySyncError> {
+    let yesterday = chrono::Utc::now().date_naive() - chrono::Duration::days(1);
+
+    let watermark = {
+        let db_path = db_path.to_path_buf();
+        tokio::task::spawn_blocking(move || -> Result<Option<NaiveDate>, store::StoreError> {
+            let conn = store::open(&db_path)?;
+            Ok(store::max_daily_date(&conn)?)
+        })
+        .await
+        .expect("run_daily_sync: blocking task panicked")?
+    };
+
+    let Some((start, end)) = next_sync_range(watermark, yesterday) else {
+        return Ok(()); // Already caught up.
+    };
+
+    let daily_rows = ga4::fetch_daily_page_visitors(config, start, end)
+        .await
+        .map_err(DailySyncError::Ga4)?;
+    let all_time_rows = ga4::fetch_all_time_visitor_totals(config)
+        .await
+        .map_err(DailySyncError::Ga4)?;
+
+    let db_path = db_path.to_path_buf();
+    tokio::task::spawn_blocking(move || -> Result<(), store::StoreError> {
+        let mut conn = store::open(&db_path)?;
+        store::upsert_daily_visitors(&mut conn, &daily_rows)?;
+        store::replace_all_time_visitors(&mut conn, &all_time_rows, end)?;
+        store::prune_short_term_visits_through(&conn, end)?;
+        Ok(())
+    })
+    .await
+    .expect("run_daily_sync: blocking task panicked")?;
+
+    Ok(())
+}
+
+pub(crate) fn start(db_path: PathBuf) -> watch::Sender<String> {
+    let (tx, _rx) = watch::channel(counters_json(&[]));
+
+    if is_production() {
+        match Ga4Config::from_env() {
+            Some(config) => spawn_ga4_daily_sync(db_path.clone(), config),
+            None => eprintln!(
+                "visitor ticker: APP_ENV=production but GOOGLE_APPLICATION_CREDENTIALS/GA4_PROPERTY_ID \
+                 are not both set; the long-term visitor totals will not update"
+            ),
+        }
     }
 
-    let (tx, _rx) = watch::channel(counters_json(&initial_counters));
-    spawn_visitor_ticker(
-        tx.clone(),
-        initial_counters,
-        ga4_config,
-        visitor_tick_interval(),
-    );
+    spawn_combined_ticker(tx.clone(), db_path, visitor_tick_interval());
     tx
 }
 
@@ -379,22 +482,186 @@ mod tests {
         remove_env("VISITOR_TICK_INTERVAL_MINUTES");
     }
 
-    #[test]
-    fn counters_from_top_pages_preserves_order_and_fields() {
-        let top_pages = vec![("/".to_string(), 42), ("/about-me".to_string(), 7)];
-
-        let counters = counters_from_top_pages(top_pages);
-
-        assert_eq!(counters.len(), 2);
-        assert_eq!(counters[0].path, "/");
-        assert_eq!(counters[0].total_unique_visitors, 42);
-        assert_eq!(counters[1].path, "/about-me");
-        assert_eq!(counters[1].total_unique_visitors, 7);
+    fn date(s: &str) -> NaiveDate {
+        NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
     }
 
     #[test]
-    fn counters_from_top_pages_is_empty_for_an_empty_input() {
-        assert!(counters_from_top_pages(Vec::new()).is_empty());
+    fn combine_totals_adds_short_term_on_top_of_all_time() {
+        let all_time = HashMap::from([("/".to_string(), 40)]);
+        let short_term = HashMap::from([("/".to_string(), 2)]);
+
+        let counters = combine_totals(all_time, short_term);
+
+        assert_eq!(counters.len(), 1);
+        assert_eq!(counters[0].path, "/");
+        assert_eq!(counters[0].total_unique_visitors, 42);
+    }
+
+    #[test]
+    fn combine_totals_includes_a_page_present_in_only_one_side() {
+        let all_time = HashMap::from([("/".to_string(), 40)]);
+        let short_term = HashMap::from([("/new-post".to_string(), 3)]);
+
+        let counters = combine_totals(all_time, short_term);
+
+        assert_eq!(counters.len(), 2);
+        assert!(
+            counters
+                .iter()
+                .any(|c| c.path == "/" && c.total_unique_visitors == 40)
+        );
+        assert!(
+            counters
+                .iter()
+                .any(|c| c.path == "/new-post" && c.total_unique_visitors == 3)
+        );
+    }
+
+    #[test]
+    fn combine_totals_is_empty_when_both_sides_are_empty() {
+        assert!(combine_totals(HashMap::new(), HashMap::new()).is_empty());
+    }
+
+    #[test]
+    fn combine_totals_sorts_by_path() {
+        let all_time = HashMap::from([("/z".to_string(), 1), ("/a".to_string(), 1)]);
+
+        let counters = combine_totals(all_time, HashMap::new());
+
+        assert_eq!(counters[0].path, "/a");
+        assert_eq!(counters[1].path, "/z");
+    }
+
+    #[test]
+    fn next_sync_range_backfills_a_year_when_there_is_no_watermark() {
+        let yesterday = date("2026-06-01");
+        let (start, end) = next_sync_range(None, yesterday).unwrap();
+
+        assert_eq!(end, yesterday);
+        assert_eq!(start, date("2025-06-02"));
+        assert_eq!((end - start).num_days(), BACKFILL_DAYS - 1);
+    }
+
+    #[test]
+    fn next_sync_range_fetches_only_since_the_watermark() {
+        let watermark = date("2026-05-30");
+        let yesterday = date("2026-06-01");
+
+        assert_eq!(
+            next_sync_range(Some(watermark), yesterday),
+            Some((date("2026-05-31"), yesterday))
+        );
+    }
+
+    #[test]
+    fn next_sync_range_is_none_when_already_caught_up() {
+        let yesterday = date("2026-06-01");
+        // Watermark already equals yesterday: nothing new to fetch.
+        assert_eq!(next_sync_range(Some(yesterday), yesterday), None);
+    }
+
+    #[test]
+    fn next_sync_range_is_none_when_the_watermark_is_in_the_future() {
+        let yesterday = date("2026-06-01");
+        assert_eq!(next_sync_range(Some(date("2026-06-05")), yesterday), None);
+    }
+
+    #[test]
+    fn daily_sync_error_display_includes_the_underlying_error() {
+        let store_err = DailySyncError::Store(store::StoreError::Sqlite(
+            rusqlite::Error::QueryReturnedNoRows,
+        ));
+        assert!(store_err.to_string().contains("Query returned no rows"));
+
+        let ga4_err = DailySyncError::Ga4(ga4::Ga4Error::Auth(gcp_auth::Error::Str("boom")));
+        assert!(ga4_err.to_string().contains("boom"));
+    }
+
+    #[tokio::test]
+    async fn read_combined_totals_reads_all_time_and_short_term_from_the_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("visitors.db");
+        {
+            let mut conn = store::open(&db_path).unwrap();
+            store::replace_all_time_visitors(
+                &mut conn,
+                &[("/".to_string(), 10)],
+                date("2026-01-01"),
+            )
+            .unwrap();
+            store::insert_short_term_visits(
+                &mut conn,
+                &[store::ShortTermVisit {
+                    day: date("2026-01-02"),
+                    path: "/".to_string(),
+                    visitor_key: "alice".to_string(),
+                }],
+            )
+            .unwrap();
+        }
+
+        let (all_time, short_term) = read_combined_totals(db_path).await.unwrap();
+        assert_eq!(all_time.get("/"), Some(&10));
+        assert_eq!(short_term.get("/"), Some(&1));
+    }
+
+    // Exercises the early-return branch (already caught up, so no GA4 call
+    // is ever made) without needing real credentials - `Ga4Config::from_env`
+    // just needs *some* values present, since run_daily_sync returns before
+    // they're used for anything.
+    #[actix_web::test]
+    #[serial(ga4_env)]
+    async fn run_daily_sync_does_nothing_when_already_caught_up() {
+        set_env("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent/creds.json");
+        set_env("GA4_PROPERTY_ID", "123456789");
+        let config = Ga4Config::from_env().unwrap();
+        remove_env("GOOGLE_APPLICATION_CREDENTIALS");
+        remove_env("GA4_PROPERTY_ID");
+
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("visitors.db");
+        let yesterday = chrono::Utc::now().date_naive() - chrono::Duration::days(1);
+        {
+            let mut conn = store::open(&db_path).unwrap();
+            store::upsert_daily_visitors(&mut conn, &[(yesterday, "/".to_string(), 1)]).unwrap();
+        }
+
+        assert!(run_daily_sync(&db_path, &config).await.is_ok());
+    }
+
+    #[actix_web::test]
+    #[serial(ws_sessions)]
+    async fn spawn_combined_ticker_broadcasts_the_combined_total_when_a_session_is_active() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("visitors.db");
+        {
+            let mut conn = store::open(&db_path).unwrap();
+            store::replace_all_time_visitors(
+                &mut conn,
+                &[("/".to_string(), 5)],
+                date("2026-01-01"),
+            )
+            .unwrap();
+        }
+
+        // Keeps has_active_sessions() true for the duration of the test.
+        let _slot = SessionSlot::try_acquire().expect("should have room");
+
+        let (tx, rx) = watch::channel(counters_json(&[]));
+        spawn_combined_ticker(tx, db_path, Duration::from_millis(20));
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if rx.borrow().contains(r#""total_unique_visitors":5"#) {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "ticker did not broadcast the combined total in time"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
     }
 
     #[test]
@@ -498,15 +765,15 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn start_seeds_the_watch_channel_with_zeroed_counts_for_every_seed_path() {
-        let tx = start();
+    async fn start_seeds_the_watch_channel_with_an_empty_list() {
+        // The real per-page counts only exist once the ticker has read them
+        // from sqlite; start() itself just seeds an empty snapshot and
+        // spawns the background tasks that will fill it in.
+        let dir = tempfile::tempdir().unwrap();
+        let tx = start(dir.path().join("visitors.db"));
         let rx = tx.subscribe();
-        let initial = rx.borrow().clone();
 
-        assert_eq!(
-            initial,
-            r#"[{"path":"/","total_unique_visitors":0},{"path":"/about-me","total_unique_visitors":0}]"#
-        );
+        assert_eq!(rx.borrow().clone(), "[]");
     }
 
     // Real websocket-protocol integration tests for `handle`, using a bound

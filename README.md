@@ -114,9 +114,11 @@ involved:
    (DNS-01 via Cloudflare — skipped if one already exists under
    `$STATE_DIR`), keeps a `certbot-renew` sidecar container running for
    renewals, copies a staged GA4 service-account key into `$STATE_DIR` if
-   one was provided, and stops/recreates the app container in place.
-   `$STATE_DIR` (the cert and GA4-key volume) is never touched by a
-   redeploy other than that copy, and the staged deploy files (including
+   one was provided, and stops/recreates the app container in place with
+   the visitor counter's sqlite directory (`$STATE_DIR/data`, see
+   [`src/store.rs`](src/store.rs)) mounted read-write. `$STATE_DIR` (the
+   cert, GA4-key, and visitor-data volume) is never touched by a redeploy
+   other than that GA4-key copy, and the staged deploy files (including
    the Cloudflare token and the GA4 key) are deleted on the VM whether the
    deploy succeeds or fails.
 
@@ -149,18 +151,47 @@ Variables here show up in three different shapes:
 | `TLS_CERT_PATH` | optional | unset (TLS disabled) | `.env` locally, or `-e` on `docker run` (see [`deploy/run.sh`](deploy/run.sh)) | Path to a `fullchain.pem`. Set together with `TLS_KEY_PATH` to have this process terminate TLS itself, e.g. pointed at a certbot-managed cert. |
 | `TLS_KEY_PATH` | optional | unset | same | Path to the matching `privkey.pem`. |
 | `TLS_PORT` | optional | `443` | same | HTTPS bind port; only used once `TLS_CERT_PATH`/`TLS_KEY_PATH` are both set. |
-| `APP_ENV` | optional | unset (dev) | `.env` locally; `ENV APP_ENV=production` in [`Dockerfile`](Dockerfile) | Set to `production` to have the visitor ticker (see [`src/ws_counter.rs`](src/ws_counter.rs)) query real GA4 data via [`src/ga4.rs`](src/ga4.rs). Any other value (including unset) keeps it on a local-increment fallback that needs no GA4 credentials — used for local dev and the test suite. Either way, the ticker only does that work on ticks where at least one browser has `/ws-counter` open. |
-| `VISITOR_TICK_INTERVAL_MINUTES` | optional | `1` | `.env` locally, or `-e` on `docker run` | How often (in whole minutes) the ticker wakes up to check for active connections and, if any exist, refresh the counts. A missing, zero, or unparseable value falls back to `1`. |
+| `VISITOR_DB_PATH` | optional | `./visitors.db` locally; `/data/visitors.db` in Docker/on the VM | `.env` locally; `ENV VISITOR_DB_PATH=/data/visitors.db` in [`Dockerfile`](Dockerfile); `-v .../data:/data` volume in [`deploy/run.sh`](deploy/run.sh) | Sqlite database backing the visitor counter (see [`src/store.rs`](src/store.rs)): long-term GA4 totals plus this site's own self-tracked page-serve hits. Created (including parent directories) on first run. |
+| `APP_ENV` | optional | unset (dev) | `.env` locally; `ENV APP_ENV=production` in [`Dockerfile`](Dockerfile) | Set to `production` to have the daily GA4 sync (see [`src/ws_counter.rs`](src/ws_counter.rs)) populate the long-term totals via [`src/ga4.rs`](src/ga4.rs). Any other value (including unset) just leaves the long-term table empty — the page-serve self-tracking (see [`src/static_files.rs`](src/static_files.rs)) runs regardless of this setting. Either way, the ticker only broadcasts on ticks where at least one browser has `/ws-counter` open. |
+| `VISITOR_TICK_INTERVAL_MINUTES` | optional | `1` | `.env` locally, or `-e` on `docker run` | How often (in whole minutes) the ticker wakes up to check for active connections and, if any exist, recompute and broadcast the combined total. A missing, zero, or unparseable value falls back to `1`. |
 | `GOOGLE_APPLICATION_CREDENTIALS` | optional | unset (GA4 querying disabled) | `.env` locally, or `-e`/mounted file on `docker run` (see [`deploy/run.sh`](deploy/run.sh)) | Path to a GCP service-account JSON key. Only read when `APP_ENV=production`; the standard GCP client-library env var name, so it also works with other Google tooling unmodified. |
-| `GA4_PROPERTY_ID` | optional | unset (GA4 querying disabled) | same | Numeric GA4 property ID the ticker queries. Required alongside `GOOGLE_APPLICATION_CREDENTIALS` for GA4 querying to actually happen. |
-| `GA4_TOP_PAGES_LIMIT` | optional | `50` | same | How many of the most-visited pages (by total users, descending) the ticker's GA4 report returns — not a fixed list of tracked pages, so the set of pages shown can change as traffic does. A missing, zero, or unparseable value falls back to `50`. |
+| `GA4_PROPERTY_ID` | optional | unset (GA4 querying disabled) | same | Numeric GA4 property ID the daily sync queries. Required alongside `GOOGLE_APPLICATION_CREDENTIALS` for GA4 querying to actually happen. |
+| `GA4_TOP_PAGES_LIMIT` | optional | `50` | same | How many of the most-visited pages (by total users, descending) the daily sync's all-time query tracks — not a fixed list of pages, so the set can change as traffic does. A missing, zero, or unparseable value falls back to `50`. |
+| `TRUST_CF_CONNECTING_IP` | optional | unset (untrusted) | `.env` locally, or `-e` on `docker run` | Set to `true` to have the visitor tracker (see [`src/visitor_key.rs`](src/visitor_key.rs)) key visits off the `CF-Connecting-IP` header instead of the TCP peer address. See [Running behind Cloudflare](#running-behind-cloudflare) below before enabling this. |
 
 The TLS variables need no external permissions — purely local process
 configuration, with cert/key files re-read whenever their mtime changes so
 certbot renewals don't require a restart. `GOOGLE_APPLICATION_CREDENTIALS`
 is different: the service account behind that key must be granted
 **Viewer** access on the `GA4_PROPERTY_ID` property (GA4 Admin → Property
-Access Management) before the ticker can read anything from it.
+Access Management) before the daily sync can read anything from it.
+
+### Running behind Cloudflare
+
+If this server ends up behind Cloudflare (proxied/"orange-cloud" DNS)
+rather than answering requests directly, every connection the app sees
+arrives from Cloudflare's edge, not the visitor — `req.peer_addr()` would
+report Cloudflare's IP for everyone. Cloudflare passes the real client IP
+through in the `CF-Connecting-IP` header instead.
+
+Trusting that header is only safe if the origin *cannot* be reached any
+other way: since it's an ordinary request header, anyone who can connect to
+the origin directly (bypassing Cloudflare) can send an arbitrary
+`CF-Connecting-IP` value and spoof any IP they like, which would let
+someone trivially inflate the visitor counter or evade the deduplication
+in [`src/visitor_key.rs`](src/visitor_key.rs). So:
+
+1. Firewall the origin (e.g. the GCP VM's firewall rules) to only accept
+   inbound traffic on `HTTP_PORT`/`HTTPS_PORT` from
+   [Cloudflare's published IP ranges](https://www.cloudflare.com/ips/).
+2. Only then set `TRUST_CF_CONNECTING_IP=true`.
+
+Leaving it unset is always safe (and is the default) — the app behaves
+exactly as if there were no proxy in front of it, using the TCP peer
+address. The `Origin`/`Host`-based same-origin check on the `/ws-counter`
+WebSocket upgrade (see [`src/ws_counter.rs`](src/ws_counter.rs)) is
+unaffected either way, since Cloudflare passes both of those through
+unchanged.
 
 ### Frontend build-time (Vite, `VITE_`-prefixed)
 
@@ -195,6 +226,7 @@ just means the placeholder IDs are compiled in.
 | `GA4_PROPERTY_ID` | optional | none (GA4 querying disabled) | Numeric GA4 property ID; written into `deploy.env` and passed to the app container as `GA4_PROPERTY_ID` (see [Backend runtime](#backend-runtime-standard-env-vars) above). |
 | `GA4_TOP_PAGES_LIMIT` | optional | `50` (set by the app itself) | How many top pages to request; written into `deploy.env` and passed to the app container as `GA4_TOP_PAGES_LIMIT` only when set (see [Backend runtime](#backend-runtime-standard-env-vars) above). |
 | `VISITOR_TICK_INTERVAL_MINUTES` | optional | `1` (set by the app itself) | How often the ticker checks for active connections/refreshes counts; written into `deploy.env` and passed to the app container as `VISITOR_TICK_INTERVAL_MINUTES` only when set (see [Backend runtime](#backend-runtime-standard-env-vars) above). |
+| `TRUST_CF_CONNECTING_IP` | optional | unset (untrusted) | Whether to trust the `CF-Connecting-IP` header for visitor tracking; written into `deploy.env` and passed to the app container only when set. **Do not set this without also restricting the GCP firewall to Cloudflare's IP ranges** — see [Running behind Cloudflare](#running-behind-cloudflare) above. |
 
 **External permissions:** none directly — these are plain config values.
 `GCP_PROJECT_ID`/`GCP_ZONE`/`GCP_INSTANCE_NAME` just need to correctly
@@ -213,7 +245,7 @@ distinct from the IAP/SSH firewall rule described below.
 
 ## Personal notes
 
-This website started as a learning project. An interesting architecture choice used
+This website started as a learning project. An interesting (_that doesn't mean good_) architecture choice used
 to learn an unfamiliar language (Rust), with a new (to me) frontend (SvelteKit). I've already
 worked with other languages (both front and back end), but it's always exciting to
 learn something new. The goal was simple: Use Svelte along with Tailwind/Flowbite/Vite,

@@ -6,3 +6,9 @@
 # never committed, regardless of where they're placed.
 ga4-credentials.json
 *service-account*.json
+
+# Local visitor-counter sqlite database (see src/store.rs) and its WAL/SHM
+# sidecar files.
+/visitors.db
+/visitors.db-wal
+/visitors.db-shm

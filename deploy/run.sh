@@ -34,6 +34,12 @@ set -euo pipefail
 : "${GA4_PROPERTY_ID:=}"
 : "${GA4_TOP_PAGES_LIMIT:=}"
 : "${VISITOR_TICK_INTERVAL_MINUTES:=}"
+# Only set this to "true" once the GCP firewall also restricts inbound
+# HTTP_PORT/HTTPS_PORT traffic to Cloudflare's published IP ranges
+# (https://www.cloudflare.com/ips/) - see the README's "Running behind
+# Cloudflare" section. This script does not (and cannot) enforce that
+# firewall rule itself.
+: "${TRUST_CF_CONNECTING_IP:=}"
 
 # DOMAIN, LETSENCRYPT_EMAIL: certbot's `-d`/`--email` for the cert.
 # CLOUDFLARE_API_TOKEN: Cloudflare API Token (not the legacy Global API Key)
@@ -52,9 +58,14 @@ done
 CERT_DIR="$STATE_DIR/letsencrypt"
 CLOUDFLARE_INI="$STATE_DIR/cloudflare.ini"
 GA4_CREDENTIALS_FILE="$STATE_DIR/ga4-credentials.json"
+# Visitor-counter sqlite storage (see src/store.rs) - unlike the above,
+# always created and mounted read-write: it's core infrastructure for the
+# counter feature, not an opt-in one, and it's never touched by a redeploy
+# (only ever added to, same as $CERT_DIR).
+VISITOR_DATA_DIR="$STATE_DIR/data"
 # --------------------------------------------------------------------------
 
-mkdir -p "$CERT_DIR"
+mkdir -p "$CERT_DIR" "$VISITOR_DATA_DIR"
 
 # Cloudflare credentials live outside $CERT_DIR on purpose: $CERT_DIR is
 # bind-mounted read-only into the app container so it can reach the live
@@ -133,32 +144,42 @@ if [ -n "$GA4_CREDENTIALS_STAGED" ] && [ -s "$GA4_CREDENTIALS_STAGED" ] && [ -n 
   fi
 fi
 
-# Independent of the GA4 block above: this also paces the dev-style local
-# increment the ticker falls back to if GA4 isn't configured. Only passed
-# through when set - src/ws_counter.rs already defaults to 1 minute.
-TICK_DOCKER_ARGS=()
+# Independent of the GA4 block above: these apply regardless of whether
+# GA4 is configured. Both only passed through when set - the app already
+# defaults to VISITOR_TICK_INTERVAL_MINUTES=1 and TRUST_CF_CONNECTING_IP
+# unset (untrusted) on its own.
+MISC_DOCKER_ARGS=()
 if [ -n "$VISITOR_TICK_INTERVAL_MINUTES" ]; then
-  TICK_DOCKER_ARGS+=(-e VISITOR_TICK_INTERVAL_MINUTES="$VISITOR_TICK_INTERVAL_MINUTES")
+  MISC_DOCKER_ARGS+=(-e VISITOR_TICK_INTERVAL_MINUTES="$VISITOR_TICK_INTERVAL_MINUTES")
+fi
+if [ -n "$TRUST_CF_CONNECTING_IP" ]; then
+  MISC_DOCKER_ARGS+=(-e TRUST_CF_CONNECTING_IP="$TRUST_CF_CONNECTING_IP")
 fi
 
 # --- App container -------------------------------------------------------
 # Stops+removes whatever was previously running under this name before
 # starting the new image - an in-place update, not a fresh install - and
-# never touches $CERT_DIR, so already-issued certificates survive redeploys.
-# HOST is deliberately not configurable: it must stay 0.0.0.0 for the -p
-# port mapping below to reach the process inside the container.
+# never touches $CERT_DIR or $VISITOR_DATA_DIR, so already-issued
+# certificates and visitor counts survive redeploys. HOST is deliberately
+# not configurable: it must stay 0.0.0.0 for the -p port mapping below to
+# reach the process inside the container. $VISITOR_DATA_DIR is mounted
+# read-write and as a *directory* (not the single .db file) - sqlite's WAL
+# mode writes `-wal`/`-shm` sidecar files alongside the main one, and a
+# single-file mount would leave those non-persistent (see src/store.rs and
+# the Dockerfile's VISITOR_DB_PATH comment).
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   -v "$CERT_DIR:/etc/letsencrypt:ro" \
+  -v "$VISITOR_DATA_DIR:/data" \
   -e HOST=0.0.0.0 \
   -e PORT="$CONTAINER_PORT" \
   -e TLS_PORT="$CONTAINER_TLS_PORT" \
   -e TLS_CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem" \
   -e TLS_KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem" \
   "${GA4_DOCKER_ARGS[@]}" \
-  "${TICK_DOCKER_ARGS[@]}" \
+  "${MISC_DOCKER_ARGS[@]}" \
   -p "$HTTP_PORT:$CONTAINER_PORT" \
   -p "$HTTPS_PORT:$CONTAINER_TLS_PORT" \
   "$IMAGE_NAME:latest"

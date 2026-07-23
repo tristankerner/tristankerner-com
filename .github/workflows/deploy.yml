@@ -171,6 +171,10 @@ jobs:
           # check for active connections and refresh counts (src/ws_counter.rs
           # defaults to 1 if this is left unset).
           VISITOR_TICK_INTERVAL_MINUTES: ${{ vars.VISITOR_TICK_INTERVAL_MINUTES }}
+          # TRUST_CF_CONNECTING_IP: only set to "true" once the GCP firewall
+          # also restricts HTTP_PORT/HTTPS_PORT to Cloudflare's published IP
+          # ranges - see the README's "Running behind Cloudflare" section.
+          TRUST_CF_CONNECTING_IP: ${{ vars.TRUST_CF_CONNECTING_IP }}
         run: |
           umask 077
           {
@@ -187,6 +191,7 @@ jobs:
             printf 'GA4_PROPERTY_ID=%s\n' "$GA4_PROPERTY_ID"
             printf 'GA4_TOP_PAGES_LIMIT=%s\n' "$GA4_TOP_PAGES_LIMIT"
             printf 'VISITOR_TICK_INTERVAL_MINUTES=%s\n' "$VISITOR_TICK_INTERVAL_MINUTES"
+            printf 'TRUST_CF_CONNECTING_IP=%s\n' "$TRUST_CF_CONNECTING_IP"
           } > deploy.env
 
       # GA4_CREDENTIALS_JSON: full JSON contents of a GCP service-account
