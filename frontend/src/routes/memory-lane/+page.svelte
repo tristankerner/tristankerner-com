@@ -17,7 +17,9 @@
 
     <nav aria-label="Jump to a memory" class="mb-10 flex flex-wrap justify-center gap-2">
         {#each memories as memory (memory.id)}
-            <Badge href={`#${memory.id}`} color="primary" rounded>{formatYear(memory.date)} &middot; {memory.title}</Badge>
+            <Badge href={`#${memory.id}`} color="primary" rounded>
+                <span>{formatYear(memory.date)}</span> &middot; <span>{memory.title}</span>
+            </Badge>
         {/each}
     </nav>
 

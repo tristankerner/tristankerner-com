@@ -16,7 +16,8 @@
         <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{profile.name}</h1>
             <p class="text-primary-600 dark:text-primary-500 mt-1 text-lg font-medium">
-                {profile.title} <span class="text-gray-400 dark:text-gray-500">|</span> {profile.tagline}
+                <span>{profile.title}</span> <span class="text-gray-400 dark:text-gray-500">|</span>
+                <span>{profile.tagline}</span>
             </p>
         </div>
     </section>
@@ -59,7 +60,7 @@
                                 {cert.name}
                             {/if}
                         </p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">ID: {cert.id}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">ID: <span>{cert.id}</span></p>
                     </li>
                 {/each}
             </ul>
@@ -78,12 +79,12 @@
                             {/if}
                         </h3>
                         <p class="mb-2 text-sm text-gray-500 italic dark:text-gray-400">
-                            {job.companyLocation} &middot; {job.description}
+                            <span>{job.companyLocation}</span> &middot; <span>{job.description}</span>
                         </p>
                         <p class="mb-1 font-semibold text-gray-700 dark:text-gray-300">
-                            {job.roles[0].title}
+                            <span>{job.roles[0].title}</span>
                             <span class="font-normal text-gray-500 dark:text-gray-400">
-                                &middot; {job.roles[0].duration} &middot; {job.roleLocation}
+                                &middot; <span>{job.roles[0].duration}</span> &middot; <span>{job.roleLocation}</span>
                             </span>
                         </p>
                         {#if job.roles.length > 1}

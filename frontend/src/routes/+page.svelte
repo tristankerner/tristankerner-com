@@ -48,7 +48,8 @@
         <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{profile.name}</h1>
             <p class="text-primary-600 dark:text-primary-500 mt-1 text-lg font-medium">
-                {profile.title} <span class="text-gray-400 dark:text-gray-500">|</span> {profile.tagline}
+                <span>{profile.title}</span> <span class="text-gray-400 dark:text-gray-500">|</span>
+                <span>{profile.tagline}</span>
             </p>
             <p class="mt-4 text-gray-600 dark:text-gray-400">
                 Welcome — this is where I write about the software I build and the problems I run into along the way.

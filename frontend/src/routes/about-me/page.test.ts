@@ -36,7 +36,7 @@ describe("about-me page", () => {
     render(AboutMePage);
     for (const cert of certifications) {
       expect(screen.getAllByText(cert.name).length).toBeGreaterThan(0);
-      expect(screen.getByText(`ID: ${cert.id}`)).toBeInTheDocument();
+      expect(screen.getAllByText(cert.id).length).toBeGreaterThan(0);
     }
   });
 
@@ -45,9 +45,8 @@ describe("about-me page", () => {
     for (const job of jobs) {
       expect(screen.getByRole("heading", { name: job.company })).toBeInTheDocument();
       expect(screen.getAllByText(job.roles[0].title, { exact: false }).length).toBeGreaterThan(0);
-      expect(
-        screen.getAllByText(`${job.roles[0].duration} · ${job.roleLocation}`, { exact: false }).length,
-      ).toBeGreaterThan(0);
+      expect(screen.getAllByText(job.roles[0].duration, { exact: false }).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(job.roleLocation, { exact: false }).length).toBeGreaterThan(0);
       expect(screen.getAllByText(job.companyLocation, { exact: false }).length).toBeGreaterThan(0);
 
       const expectedPromotion = promotedThroughText(job);

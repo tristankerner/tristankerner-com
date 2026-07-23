@@ -29,7 +29,8 @@
         {post.metadata.title}
       </h2>
       <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">
-        By {post.metadata.author} &middot; <time datetime={post.date}>{formatDate(post.date)}</time>
+        By <span>{post.metadata.author}</span> &middot;
+        <time datetime={post.date}>{formatDate(post.date)}</time>
       </p>
       <p class="font-normal text-gray-700 dark:text-gray-400">{post.metadata.excerpt}</p>
       <span class="text-primary-600 dark:text-primary-500 mt-3 inline-flex items-center font-medium">
