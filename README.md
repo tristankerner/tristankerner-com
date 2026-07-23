@@ -158,6 +158,7 @@ Variables here show up in three different shapes:
 | `GA4_PROPERTY_ID` | optional | unset (GA4 querying disabled) | same | Numeric GA4 property ID the daily sync queries. Required alongside `GOOGLE_APPLICATION_CREDENTIALS` for GA4 querying to actually happen. |
 | `GA4_TOP_PAGES_LIMIT` | optional | `50` | same | How many of the most-visited pages (by total users, descending) the daily sync's all-time query tracks — not a fixed list of pages, so the set can change as traffic does. A missing, zero, or unparseable value falls back to `50`. |
 | `TRUST_CF_CONNECTING_IP` | optional | unset (untrusted) | `.env` locally, or `-e` on `docker run` | Set to `true` to have the visitor tracker (see [`src/visitor_key.rs`](src/visitor_key.rs)) key visits off the `CF-Connecting-IP` header instead of the TCP peer address. See [Running behind Cloudflare](#running-behind-cloudflare) below before enabling this. |
+| `RUST_LOG` | optional | unset (no output) locally; `info` in Docker/on the VM | `.env` locally; `ENV RUST_LOG=info` in [`Dockerfile`](Dockerfile) | Standard `env_logger`/`log` filter syntax (e.g. `info`, `debug`, or `actix_web=info,tristankerner_com=debug`) controlling HTTP access logs (actix-web's `middleware::Logger`) and this crate's own `warn!`/`error!` calls. `env_logger` prints nothing at all if this is unset. |
 
 The TLS variables need no external permissions — purely local process
 configuration, with cert/key files re-read whenever their mtime changes so

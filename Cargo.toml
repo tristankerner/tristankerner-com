@@ -33,6 +33,12 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 hmac = "0.13.0"
 sha2 = "0.11.0"
 getrandom = "0.2"
+# Logging: the `log` facade (actix-web's own middleware::Logger emits
+# through it too) plus env_logger as the lightweight backend - no async
+# runtime integration or extra background threads, a good fit for the
+# resource-limited VPS this deploys to.
+log = "0.4"
+env_logger = "0.11"
 
 # Slower compile, but a smaller and faster binary for the resource-limited VPS.
 [profile.release]

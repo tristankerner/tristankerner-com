@@ -42,6 +42,13 @@ ENV APP_ENV=production
 #     -p 80:80 -p 443:443 tristankerner-com
 ENV VISITOR_DB_PATH=/data/visitors.db
 
+# env_logger prints nothing at all unless a filter is set, so this gives the
+# production image a sane default (access logs via actix-web's
+# middleware::Logger, plus this crate's own warn!/error! calls) without
+# requiring an operator to remember to set it. Override with -e RUST_LOG=...
+# for more/less verbosity (e.g. debug, or actix_web=info,tristankerner_com=debug).
+ENV RUST_LOG=info
+
 # TLS is opt-in (see src/main.rs): set TLS_CERT_PATH/TLS_KEY_PATH to a
 # certbot-managed fullchain.pem/privkey.pem to have this process terminate
 # HTTPS itself and redirect plain HTTP to it. e.g., with a certbot container

@@ -43,6 +43,12 @@ concurrency:
 jobs:
   build-test-and-deploy:
     runs-on: ubuntu-latest
+    # Pulls vars.*/secrets.* from the "production" GitHub Environment
+    # (Settings -> Environments) rather than repo-level ones - environment
+    # secrets/vars are only visible to a job that declares this. Pair with
+    # that environment's own deployment-branch rule (restricted to
+    # `production`) as a second guard alongside the on.push trigger above.
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4

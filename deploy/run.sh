@@ -115,6 +115,8 @@ docker run -d \
   --restart unless-stopped \
   -v "$CERT_DIR:/etc/letsencrypt" \
   -v "$CLOUDFLARE_INI:/etc/letsencrypt-cloudflare.ini:ro" \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
   --entrypoint /bin/sh \
   certbot/dns-cloudflare \
   -c 'trap exit TERM; while :; do certbot renew --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt-cloudflare.ini --dns-cloudflare-propagation-seconds 30 --non-interactive; sleep 12h & wait $!; done'
@@ -166,13 +168,19 @@ fi
 # read-write and as a *directory* (not the single .db file) - sqlite's WAL
 # mode writes `-wal`/`-shm` sidecar files alongside the main one, and a
 # single-file mount would leave those non-persistent (see src/store.rs and
-# the Dockerfile's VISITOR_DB_PATH comment).
+# the Dockerfile's VISITOR_DB_PATH comment). --log-opt caps the default
+# json-file driver's growth (10MB * 3 files) so now that access logs are on
+# (see src/main.rs's Logger middleware), stdout/stderr can't fill this
+# resource-limited VM's disk unbounded; same cap applied to certbot-renew
+# below.
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   -v "$CERT_DIR:/etc/letsencrypt:ro" \
   -v "$VISITOR_DATA_DIR:/data" \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
   -e HOST=0.0.0.0 \
   -e PORT="$CONTAINER_PORT" \
   -e TLS_PORT="$CONTAINER_TLS_PORT" \

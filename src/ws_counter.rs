@@ -286,7 +286,7 @@ fn spawn_combined_ticker(
                     let counters = combine_totals(all_time, short_term);
                     let _ = tx.send(counters_json(&counters));
                 }
-                Err(e) => eprintln!("visitor ticker: failed to read combined totals: {e}"),
+                Err(e) => log::error!("visitor ticker: failed to read combined totals: {e}"),
             }
         }
     });
@@ -354,7 +354,7 @@ fn spawn_ga4_daily_sync(db_path: PathBuf, config: Ga4Config, refresh: Arc<Notify
             interval.tick().await;
             match run_daily_sync(&db_path, &config).await {
                 Ok(()) => refresh.notify_one(),
-                Err(e) => eprintln!("visitor ticker: GA4 daily sync failed: {e}"),
+                Err(e) => log::error!("visitor ticker: GA4 daily sync failed: {e}"),
             }
         }
     });
@@ -403,12 +403,17 @@ pub(crate) fn start(db_path: PathBuf, refresh: Arc<Notify>) -> watch::Sender<Str
 
     if is_production() {
         match Ga4Config::from_env() {
-            Some(config) => spawn_ga4_daily_sync(db_path.clone(), config, refresh.clone()),
-            None => eprintln!(
+            Some(config) => {
+                log::info!("visitor ticker: GA4 daily sync enabled");
+                spawn_ga4_daily_sync(db_path.clone(), config, refresh.clone());
+            }
+            None => log::warn!(
                 "visitor ticker: APP_ENV=production but GOOGLE_APPLICATION_CREDENTIALS/GA4_PROPERTY_ID \
                  are not both set; the long-term visitor totals will not update"
             ),
         }
+    } else {
+        log::info!("visitor ticker: GA4 daily sync disabled (APP_ENV is not \"production\")");
     }
 
     spawn_combined_ticker(tx.clone(), db_path, visitor_tick_interval(), refresh);

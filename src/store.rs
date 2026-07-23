@@ -327,7 +327,7 @@ fn writer_loop(db_path: &Path, mut rx: mpsc::Receiver<ShortTermVisit>, refresh: 
     let mut conn = match open(db_path) {
         Ok(conn) => conn,
         Err(e) => {
-            eprintln!("visitor tracker: failed to open the writer connection: {e}");
+            log::error!("visitor tracker: failed to open the writer connection: {e}");
             return;
         }
     };
@@ -348,7 +348,7 @@ fn writer_loop(db_path: &Path, mut rx: mpsc::Receiver<ShortTermVisit>, refresh: 
 
         match insert_short_term_visits(&mut conn, &batch) {
             Ok(()) => refresh.notify_one(),
-            Err(e) => eprintln!(
+            Err(e) => log::error!(
                 "visitor tracker: failed to write a batch of {} visit(s): {e}",
                 batch.len()
             ),

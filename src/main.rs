@@ -24,6 +24,10 @@ async fn main() -> std::io::Result<()> {
     {
         panic!("failed to load .env: {e}");
     }
+    // After dotenv, so a RUST_LOG set in .env takes effect. env_logger
+    // prints nothing at all if RUST_LOG is unset (see the Dockerfile, which
+    // sets a default of "info" for the production image).
+    env_logger::init();
 
     let db_path = visitor_db_path();
     // Unlike TLS/GA4 (opt-in features that degrade to "off" when
@@ -56,6 +60,19 @@ async fn main() -> std::io::Result<()> {
     let tls_config = tls::server_config()?;
     let tls_enabled = tls_config.is_some();
 
+    // A `docker logs` right after a deploy should confirm the config that
+    // was actually picked up, not just that the process is alive.
+    log::info!(
+        "starting: host={}, port={}, tls={}",
+        bind_host(),
+        bind_port(),
+        if tls_enabled {
+            format!("enabled (https port {})", tls::port())
+        } else {
+            "disabled".to_string()
+        }
+    );
+
     let mut server = HttpServer::new(move || {
         // Only add headers the statically generated pages can't set themselves.
         // HSTS is only safe to send once this process is actually the one
@@ -77,6 +94,12 @@ async fn main() -> std::io::Result<()> {
             .app_data(tracker.clone())
             .app_data(refresh.clone())
             .wrap(headers)
+            // Outermost, so it times/logs the full request including the
+            // headers middleware above. Access logs are gated behind
+            // RUST_LOG the same as this crate's own log calls (see
+            // env_logger::init() above) - unset means silent, matching the
+            // pre-existing default.
+            .wrap(middleware::Logger::default())
             .route("/ws-counter", web::get().to(ws_counter::handle))
             // Everything else is the static SvelteKit build (assets, prerendered
             // pages, SPA-shell fallback), with precompressed variants and caching.
