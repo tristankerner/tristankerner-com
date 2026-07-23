@@ -2,7 +2,9 @@
     import {themeState} from "../lib/state.svelte.ts";
     import { connectCounterSocket } from "../lib/counterSocket.ts";
     import { onMount } from 'svelte';
+    import { afterNavigate } from '$app/navigation';
     import { page } from "$app/state";
+    import { trackPageView } from "$lib/consent/analytics.ts";
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
     import logo from '$lib/assets/logo.svg';
@@ -36,6 +38,14 @@
             attributes: true,
         });
     });
+
+    // 'enter' is the initial load, already covered by each tracker's own
+    // auto-fired pageview when its script loads (see analytics.ts); every
+    // later client-side navigation needs reporting explicitly.
+    afterNavigate((navigation) => {
+        if (navigation.type === 'enter') return;
+        trackPageView(page.url.pathname + page.url.search);
+    });
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
@@ -63,8 +73,8 @@
         </NavUl>
     </Navbar>
 </div>
-<main class="min-h-screen bg-gray-50 p-4 dark:bg-gray-900">
-    <div class="flex float-right items-center justify-center">
+<main class="relative min-h-screen bg-gray-50 p-4 dark:bg-gray-900">
+    <div class="absolute top-4 right-4 z-10 flex items-center justify-center">
         <Counter></Counter>
     </div>
 

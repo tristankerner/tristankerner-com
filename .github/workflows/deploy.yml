@@ -74,7 +74,9 @@ jobs:
       # Both IDs are public client-side identifiers (they ship in the built
       # JS regardless), so they're plain repository variables rather than
       # secrets. Vite only inlines VITE_-prefixed vars that are present at
-      # build time; unset ones fall back to the placeholders in
+      # build time; if GOOGLE_ANALYTICS_ID is left unset, that falls back to
+      # a harmless placeholder, but an unset/blank FACEBOOK_PIXEL_ID disables
+      # the Meta Pixel entirely rather than loading a fake one - see
       # frontend/src/lib/consent/config.ts.
       - name: Build frontend
         working-directory: frontend

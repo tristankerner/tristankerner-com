@@ -102,7 +102,8 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .route("/ws-counter", web::get().to(ws_counter::handle))
             // Everything else is the static SvelteKit build (assets, prerendered
-            // pages, SPA-shell fallback), with precompressed variants and caching.
+            // pages, 404 fallback for unknown routes), with precompressed variants
+            // and caching.
             .default_service(web::to(static_files::serve))
     })
     .max_connections(MAX_CONNECTIONS);

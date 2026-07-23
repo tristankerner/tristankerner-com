@@ -2,6 +2,7 @@ use crate::store::{ShortTermVisit, VisitorTracker};
 use crate::visitor_key;
 use actix_files::NamedFile;
 use actix_web::http::Method;
+use actix_web::http::StatusCode;
 use actix_web::http::header::{self, ContentEncoding, HeaderValue};
 use actix_web::{HttpRequest, HttpResponse, Result, web};
 use std::path::{Path, PathBuf};
@@ -18,7 +19,7 @@ const BUILD_DIR: &str = "./tests/fixtures/static-build";
 // root path and for any path with empty, dot-prefixed (`.`, `..`, hidden files),
 // or backslash-containing segments. `req.path()` is *not* percent-decoded, so
 // encoded traversal sequences (`%2e%2e`) never reach the filesystem — they simply
-// fail to match a real file and fall through to the SPA shell.
+// fail to match a real file and fall through to the 404 page.
 fn sanitized_rel_path(request_path: &str) -> Option<PathBuf> {
     let trimmed = request_path.trim_matches('/');
     if trimmed.is_empty() {
@@ -36,27 +37,40 @@ fn sanitized_rel_path(request_path: &str) -> Option<PathBuf> {
 }
 
 // SvelteKit (adapter-static, prerender = true) emits one static HTML file per
-// route (e.g. `/about-me` -> `about-me.html`). Resolution order: exact asset
-// file, prerendered page, SPA shell for genuinely unknown routes.
+// route (e.g. `/about-me` -> `about-me.html`) plus a generic `404.html`
+// fallback (the adapter's `fallback` option, see frontend/vite.config.ts) for
+// every other path. Resolution order: exact asset file, prerendered page,
+// 404 page for genuinely unknown routes.
+//
+// Every real route is prerendered, so unlike a true SPA fallback this never
+// serves the home page for an unknown path - a typo'd URL, a stale link, or
+// a bot probing for `/wp-login.php` gets an actual 404 status, and
+// record_page_view (below) skips counting it as a visit.
 //
 // Takes `build_dir` explicitly (rather than reading BUILD_DIR itself) so
 // tests can point it at a throwaway directory instead of the real build
 // output.
-fn resolve_target(request_path: &str, build_dir: &Path) -> PathBuf {
+fn resolve_target(request_path: &str, build_dir: &Path) -> (PathBuf, StatusCode) {
+    // sanitized_rel_path also rejects the root path, but "/" is the one
+    // path that's never expected to be a 404 - it's the index route.
+    if request_path.trim_matches('/').is_empty() {
+        return (build_dir.join("index.html"), StatusCode::OK);
+    }
+
     if let Some(rel) = sanitized_rel_path(request_path) {
         let direct = build_dir.join(&rel);
         if direct.is_file() {
-            return direct;
+            return (direct, StatusCode::OK);
         }
 
         let mut html = direct;
         html.set_extension("html");
         if html.is_file() {
-            return html;
+            return (html, StatusCode::OK);
         }
     }
 
-    build_dir.join("index.html")
+    (build_dir.join("404.html"), StatusCode::NOT_FOUND)
 }
 
 // Minimal Accept-Encoding check: the encoding is listed and not refused with q=0.
@@ -113,7 +127,7 @@ pub(crate) async fn serve(
             .finish());
     }
 
-    let target = resolve_target(req.path(), Path::new(BUILD_DIR));
+    let (target, status) = resolve_target(req.path(), Path::new(BUILD_DIR));
     let is_html = target.extension().is_some_and(|ext| ext == "html");
 
     let accept_encoding = req
@@ -150,6 +164,13 @@ pub(crate) async fn serve(
     };
 
     let mut res = file.into_response(&req);
+    // NamedFile may have already answered with 304 (conditional GET) or 206
+    // (Range) instead of 200 - only force the "unknown route" status onto an
+    // otherwise-plain 200, so a repeat request for the same 404 page can
+    // still revalidate normally.
+    if status == StatusCode::NOT_FOUND && res.status() == StatusCode::OK {
+        *res.status_mut() = StatusCode::NOT_FOUND;
+    }
     res.headers_mut()
         .insert(header::VARY, HeaderValue::from_static("accept-encoding"));
     res.headers_mut().insert(
@@ -157,19 +178,26 @@ pub(crate) async fn serve(
         HeaderValue::from_static(cache_control),
     );
 
-    record_page_view(&req, is_html, &tracker);
+    record_page_view(&req, is_html, status, &tracker);
     Ok(res)
 }
 
-// Only counts genuine page loads (an HTML response to a real GET), not
-// HEAD requests or the JS/CSS/image/font sub-resource requests a page load
-// also triggers. Cheap and non-blocking: HMAC computation is pure CPU work
-// (microseconds) and `try_send` never waits on I/O - the actual database
-// write happens later, off this request path entirely (see
-// store::spawn_writer). Silently does nothing without a peer address
-// (e.g. some test setups), since there's no visitor to key on.
-fn record_page_view(req: &HttpRequest, is_html: bool, tracker: &VisitorTracker) {
-    if !is_html || *req.method() != Method::GET {
+// Only counts genuine page loads (a 200 HTML response to a real GET), not
+// HEAD requests, the JS/CSS/image/font sub-resource requests a page load
+// also triggers, or 404s for paths that were never real pages (typos, stale
+// links, bots probing for e.g. `/wp-login.php`) - see resolve_target.
+// Cheap and non-blocking: HMAC computation is pure CPU work (microseconds)
+// and `try_send` never waits on I/O - the actual database write happens
+// later, off this request path entirely (see store::spawn_writer). Silently
+// does nothing without a peer address (e.g. some test setups), since
+// there's no visitor to key on.
+fn record_page_view(
+    req: &HttpRequest,
+    is_html: bool,
+    status: StatusCode,
+    tracker: &VisitorTracker,
+) {
+    if !is_html || status != StatusCode::OK || *req.method() != Method::GET {
         return;
     }
     let Some(ip) = visitor_key::client_ip(req) else {
@@ -192,7 +220,6 @@ fn record_page_view(req: &HttpRequest, is_html: bool, tracker: &VisitorTracker) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;
     use std::fs;
     use std::net::SocketAddr;
@@ -265,7 +292,7 @@ mod tests {
 
         assert_eq!(
             resolve_target("/robots.txt", dir.path()),
-            dir.path().join("robots.txt")
+            (dir.path().join("robots.txt"), StatusCode::OK)
         );
     }
 
@@ -276,7 +303,7 @@ mod tests {
 
         assert_eq!(
             resolve_target("/about-me", dir.path()),
-            dir.path().join("about-me.html")
+            (dir.path().join("about-me.html"), StatusCode::OK)
         );
     }
 
@@ -288,26 +315,36 @@ mod tests {
 
         assert_eq!(
             resolve_target("/about-me", dir.path()),
-            dir.path().join("about-me")
+            (dir.path().join("about-me"), StatusCode::OK)
         );
     }
 
     #[test]
-    fn resolve_target_falls_back_to_the_spa_shell_for_unknown_routes() {
+    fn resolve_target_serves_the_index_for_the_root_path() {
+        let dir = tempfile::tempdir().unwrap();
+
+        assert_eq!(
+            resolve_target("/", dir.path()),
+            (dir.path().join("index.html"), StatusCode::OK)
+        );
+    }
+
+    #[test]
+    fn resolve_target_returns_a_404_for_unknown_routes() {
         let dir = tempfile::tempdir().unwrap();
 
         assert_eq!(
             resolve_target("/nothing-here", dir.path()),
-            dir.path().join("index.html")
+            (dir.path().join("404.html"), StatusCode::NOT_FOUND)
         );
     }
 
     #[test]
-    fn resolve_target_falls_back_to_the_spa_shell_for_an_unsafe_path() {
+    fn resolve_target_returns_a_404_for_an_unsafe_path() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(
             resolve_target("/../../etc/passwd", dir.path()),
-            dir.path().join("index.html")
+            (dir.path().join("404.html"), StatusCode::NOT_FOUND)
         );
     }
 
@@ -415,16 +452,36 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn serve_falls_back_to_the_spa_shell_for_an_unknown_route() {
+    async fn serve_returns_a_404_for_an_unknown_route() {
         let req = TestRequest::get()
             .uri("/totally/unknown/route")
             .to_http_request();
         let res = serve(req, test_tracker()).await.unwrap();
-        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
         assert_eq!(
             res.headers().get(header::CACHE_CONTROL).unwrap(),
             "no-cache"
         );
+        assert_eq!(
+            res.headers().get(header::CONTENT_TYPE).unwrap(),
+            "text/html; charset=utf-8"
+        );
+    }
+
+    #[actix_web::test]
+    async fn serve_does_not_record_a_visit_for_an_unknown_route() {
+        let (sender, mut rx) = tokio::sync::mpsc::channel(8);
+        let tracker = web::Data::new(VisitorTracker {
+            sender,
+            hash_secret: std::sync::Arc::new(vec![0u8; 32]),
+        });
+        let req =
+            with_peer_addr(TestRequest::get().uri("/totally/unknown/route")).to_http_request();
+
+        let res = serve(req, tracker).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        assert!(rx.try_recv().is_err());
     }
 
     #[actix_web::test]
@@ -495,7 +552,7 @@ mod tests {
         let (tracker, mut rx) = tracker_with_receiver();
         let req = with_peer_addr(TestRequest::get().uri("/about-me")).to_http_request();
 
-        record_page_view(&req, true, &tracker);
+        record_page_view(&req, true, StatusCode::OK, &tracker);
 
         let event = rx.try_recv().expect("expected a recorded visit");
         assert_eq!(event.path, "/about-me");
@@ -506,7 +563,7 @@ mod tests {
         let (tracker, mut rx) = tracker_with_receiver();
         let req = with_peer_addr(TestRequest::get().uri("/robots.txt")).to_http_request();
 
-        record_page_view(&req, false, &tracker);
+        record_page_view(&req, false, StatusCode::OK, &tracker);
 
         assert!(rx.try_recv().is_err());
     }
@@ -517,7 +574,7 @@ mod tests {
         let req =
             with_peer_addr(TestRequest::default().method(Method::HEAD).uri("/")).to_http_request();
 
-        record_page_view(&req, true, &tracker);
+        record_page_view(&req, true, StatusCode::OK, &tracker);
 
         assert!(rx.try_recv().is_err());
     }
@@ -527,7 +584,17 @@ mod tests {
         let (tracker, mut rx) = tracker_with_receiver();
         let req = TestRequest::get().uri("/").to_http_request();
 
-        record_page_view(&req, true, &tracker);
+        record_page_view(&req, true, StatusCode::OK, &tracker);
+
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn record_page_view_does_nothing_for_a_404() {
+        let (tracker, mut rx) = tracker_with_receiver();
+        let req = with_peer_addr(TestRequest::get().uri("/nothing-here")).to_http_request();
+
+        record_page_view(&req, true, StatusCode::NOT_FOUND, &tracker);
 
         assert!(rx.try_recv().is_err());
     }
