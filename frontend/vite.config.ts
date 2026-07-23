@@ -39,7 +39,13 @@ export default defineConfig({
         // these options are set automatically — see below
         pages: "build",
         assets: "build",
-        fallback: undefined,
+        // Every route is prerendered (see the root +layout.ts and
+        // handleUnseenRoutes below), so this is never used as a real SPA
+        // shell for a route SvelteKit doesn't know about - only the actix
+        // server's static_files::resolve_target serves it, and only for
+        // request paths that don't match any prerendered page, with an
+        // actual 404 status.
+        fallback: "404.html",
         precompress: true,
         strict: true,
       }),
