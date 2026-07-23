@@ -70,7 +70,8 @@
       {post.metadata.title}
     </h1>
     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-      By {post.metadata.author} &middot; <time datetime={post.date}>{formatDate(post.date)}</time>
+      By <span>{post.metadata.author}</span> &middot;
+      <time datetime={post.date}>{formatDate(post.date)}</time>
     </p>
   </header>
   <div class="prose dark:prose-invert lg:prose-lg max-w-none">
