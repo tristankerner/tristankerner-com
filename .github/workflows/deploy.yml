@@ -159,6 +159,14 @@ jobs:
           HTTPS_PORT: ${{ vars.HTTPS_PORT || '443' }}
           CONTAINER_PORT: ${{ vars.CONTAINER_PORT || '80' }}
           CONTAINER_TLS_PORT: ${{ vars.CONTAINER_TLS_PORT || '443' }}
+          # GA4_PROPERTY_ID: numeric GA4 property ID the visitor ticker
+          # queries (see src/ga4.rs). Not sensitive on its own (same
+          # category as GOOGLE_ANALYTICS_ID above), hence a plain variable.
+          # Leaving it unset keeps GA4 querying disabled even in production.
+          GA4_PROPERTY_ID: ${{ vars.GA4_PROPERTY_ID }}
+          # GA4_TOP_PAGES_LIMIT: how many of the most-visited pages the GA4
+          # report returns (src/ga4.rs defaults to 50 if this is left unset).
+          GA4_TOP_PAGES_LIMIT: ${{ vars.GA4_TOP_PAGES_LIMIT }}
         run: |
           umask 077
           {
@@ -172,7 +180,24 @@ jobs:
             printf 'HTTPS_PORT=%s\n' "$HTTPS_PORT"
             printf 'CONTAINER_PORT=%s\n' "$CONTAINER_PORT"
             printf 'CONTAINER_TLS_PORT=%s\n' "$CONTAINER_TLS_PORT"
+            printf 'GA4_PROPERTY_ID=%s\n' "$GA4_PROPERTY_ID"
+            printf 'GA4_TOP_PAGES_LIMIT=%s\n' "$GA4_TOP_PAGES_LIMIT"
           } > deploy.env
+
+      # GA4_CREDENTIALS_JSON: full JSON contents of a GCP service-account
+      # key (Admin -> Property Access Management on the GA4 property must
+      # grant this service account "Viewer"). Written to its own file
+      # rather than folded into deploy.env above since it's multi-line;
+      # written unconditionally (possibly empty, if the secret isn't set)
+      # so the scp step below always has a fixed file list. Staged
+      # alongside deploy.env and deleted from the VM on exit by
+      # deploy/remote-entrypoint.sh the same way.
+      - name: Write GA4 service-account key for the VM
+        env:
+          GA4_CREDENTIALS_JSON: ${{ secrets.GA4_CREDENTIALS_JSON }}
+        run: |
+          umask 077
+          printf '%s' "$GA4_CREDENTIALS_JSON" > ga4-credentials.json
 
       # GCP_PROJECT_ID / GCP_ZONE / GCP_INSTANCE_NAME: identify the target
       # VM. GCP_ZONE/GCP_INSTANCE_NAME also used by the two steps below.
@@ -192,7 +217,7 @@ jobs:
             --project "$GCP_PROJECT_ID" \
             --zone "$GCP_ZONE" \
             --tunnel-through-iap \
-            image.tar.gz deploy/run.sh deploy/remote-entrypoint.sh deploy.env \
+            image.tar.gz deploy/run.sh deploy/remote-entrypoint.sh deploy.env ga4-credentials.json \
             "$GCP_INSTANCE_NAME:/tmp/tristankerner-deploy/"
 
       - name: Run deploy on the VM
@@ -209,4 +234,4 @@ jobs:
 
       - name: Remove local deploy config from the runner
         if: always()
-        run: rm -f deploy.env image.tar.gz
+        run: rm -f deploy.env ga4-credentials.json image.tar.gz

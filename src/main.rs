@@ -1,3 +1,4 @@
+mod ga4;
 mod static_files;
 mod tls;
 mod ws_counter;

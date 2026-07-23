@@ -113,10 +113,12 @@ involved:
    `docker load`s the image, issues a Let's Encrypt certificate on first run
    (DNS-01 via Cloudflare — skipped if one already exists under
    `$STATE_DIR`), keeps a `certbot-renew` sidecar container running for
-   renewals, and stops/recreates the app container in place.
-   `$STATE_DIR` (the cert volume) is never touched by a redeploy, and the
-   staged deploy files (including the Cloudflare token) are deleted on the
-   VM whether the deploy succeeds or fails.
+   renewals, copies a staged GA4 service-account key into `$STATE_DIR` if
+   one was provided, and stops/recreates the app container in place.
+   `$STATE_DIR` (the cert and GA4-key volume) is never touched by a
+   redeploy other than that copy, and the staged deploy files (including
+   the Cloudflare token and the GA4 key) are deleted on the VM whether the
+   deploy succeeds or fails.
 
 The comment block at the top of `.github/workflows/deploy.yml` documents the
 one-time GCP-side setup this all assumes is already in place (OS Login,
@@ -147,10 +149,17 @@ Variables here show up in three different shapes:
 | `TLS_CERT_PATH` | optional | unset (TLS disabled) | `.env` locally, or `-e` on `docker run` (see [`deploy/run.sh`](deploy/run.sh)) | Path to a `fullchain.pem`. Set together with `TLS_KEY_PATH` to have this process terminate TLS itself, e.g. pointed at a certbot-managed cert. |
 | `TLS_KEY_PATH` | optional | unset | same | Path to the matching `privkey.pem`. |
 | `TLS_PORT` | optional | `443` | same | HTTPS bind port; only used once `TLS_CERT_PATH`/`TLS_KEY_PATH` are both set. |
+| `APP_ENV` | optional | unset (dev) | `.env` locally; `ENV APP_ENV=production` in [`Dockerfile`](Dockerfile) | Set to `production` to have the visitor ticker (see [`src/ws_counter.rs`](src/ws_counter.rs)) query real GA4 data via [`src/ga4.rs`](src/ga4.rs). Any other value (including unset) keeps it on a local-increment fallback that needs no GA4 credentials — used for local dev and the test suite. |
+| `GOOGLE_APPLICATION_CREDENTIALS` | optional | unset (GA4 querying disabled) | `.env` locally, or `-e`/mounted file on `docker run` (see [`deploy/run.sh`](deploy/run.sh)) | Path to a GCP service-account JSON key. Only read when `APP_ENV=production`; the standard GCP client-library env var name, so it also works with other Google tooling unmodified. |
+| `GA4_PROPERTY_ID` | optional | unset (GA4 querying disabled) | same | Numeric GA4 property ID the ticker queries. Required alongside `GOOGLE_APPLICATION_CREDENTIALS` for GA4 querying to actually happen. |
+| `GA4_TOP_PAGES_LIMIT` | optional | `50` | same | How many of the most-visited pages (by total users, descending) the ticker's GA4 report returns — not a fixed list of tracked pages, so the set of pages shown can change as traffic does. A missing, zero, or unparseable value falls back to `50`. |
 
-No external (GitHub/GCP/Cloudflare) permissions apply to any of these —
-they're purely local process configuration. The cert/key files are re-read
-whenever their mtime changes, so certbot renewals don't require a restart.
+The TLS variables need no external permissions — purely local process
+configuration, with cert/key files re-read whenever their mtime changes so
+certbot renewals don't require a restart. `GOOGLE_APPLICATION_CREDENTIALS`
+is different: the service account behind that key must be granted
+**Viewer** access on the `GA4_PROPERTY_ID` property (GA4 Admin → Property
+Access Management) before the ticker can read anything from it.
 
 ### Frontend build-time (Vite, `VITE_`-prefixed)
 
@@ -182,6 +191,8 @@ just means the placeholder IDs are compiled in.
 | `GCP_PROJECT_ID` | **required** | — | GCP project hosting the target VM. |
 | `GCP_ZONE` | **required** | — | Compute Engine zone of the target VM. |
 | `GCP_INSTANCE_NAME` | **required** | — | Compute Engine instance name of the target VM. |
+| `GA4_PROPERTY_ID` | optional | none (GA4 querying disabled) | Numeric GA4 property ID; written into `deploy.env` and passed to the app container as `GA4_PROPERTY_ID` (see [Backend runtime](#backend-runtime-standard-env-vars) above). |
+| `GA4_TOP_PAGES_LIMIT` | optional | `50` (set by the app itself) | How many top pages to request; written into `deploy.env` and passed to the app container as `GA4_TOP_PAGES_LIMIT` only when set (see [Backend runtime](#backend-runtime-standard-env-vars) above). |
 
 **External permissions:** none directly — these are plain config values.
 `GCP_PROJECT_ID`/`GCP_ZONE`/`GCP_INSTANCE_NAME` just need to correctly
@@ -196,6 +207,7 @@ distinct from the IAP/SSH firewall rule described below.
 |---|---|---|---|
 | `GCP_SA_KEY` | **required** | JSON key for a dedicated GCP service account, used by `google-github-actions/auth` to authenticate `gcloud` for the SSH/SCP-over-IAP steps. | On the target project (or just the instance), grant the service account: `roles/iap.tunnelResourceAccessor` (open the IAP tunnel used for SSH/SCP), `roles/compute.osAdminLogin` (SSH in via OS Login *with* sudo — needed to run `docker` as root on Container-Optimized OS), `roles/compute.viewer` (resolve the instance's zone/IP by name). Also requires one-time setup: OS Login enabled on the project/instance (`enable-oslogin=TRUE` metadata) and a firewall rule allowing `tcp:22` from `35.235.240.0/20` only (the IAP forwarding range, not the public internet). |
 | `CLOUDFLARE_API_TOKEN` | **required** | Used by certbot's `dns-cloudflare` plugin for the Let's Encrypt DNS-01 challenge. Written into `deploy.env` as a real env var (never interpolated into shell text, never echoed) and deleted from the VM on exit regardless of deploy outcome. | A Cloudflare **API Token** (not the legacy Global API Key) scoped to `Zone:DNS:Edit` for `DOMAIN`'s zone only — create via My Profile → API Tokens → Create Token → "Edit zone DNS" template, restricted to that one zone. |
+| `GA4_CREDENTIALS_JSON` | optional | Full JSON contents of a GCP service-account key, used by the visitor ticker to query GA4 (see [`src/ga4.rs`](src/ga4.rs)). Written to its own `ga4-credentials.json` file on the runner (never folded into `deploy.env`, since it's multi-line), staged to the VM alongside `deploy.env`, copied into persistent storage by [`deploy/run.sh`](deploy/run.sh), then deleted from both the runner and the VM's staging directory regardless of deploy outcome. Leaving it unset keeps GA4 querying disabled even with `APP_ENV=production`. | A dedicated GCP service account (separate from the one behind `GCP_SA_KEY` — this one only ever needs GA4 read access, never IAP/SSH) granted **Viewer** on the `GA4_PROPERTY_ID` property (GA4 Admin → Property Access Management), with a JSON key created for it. |
 
 ## Personal notes
 

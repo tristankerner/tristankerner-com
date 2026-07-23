@@ -18,6 +18,10 @@ tokio = { version = "1.53.0", features = ["macros", "sync"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-pemfile = "2"
 dotenvy = "0.15.7"
+# GA4 Data API client (src/ga4.rs) for the visitor ticker, and the
+# service-account auth (JSON key -> bearer token) it queries with.
+google-analytics-api-ga4 = "0.2.0"
+gcp_auth = "0.12.7"
 
 # Slower compile, but a smaller and faster binary for the resource-limited VPS.
 [profile.release]

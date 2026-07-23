@@ -27,6 +27,12 @@ set -euo pipefail
 : "${HTTPS_PORT:=443}"
 : "${CONTAINER_PORT:=80}"
 : "${CONTAINER_TLS_PORT:=443}"
+# GA4_CREDENTIALS_STAGED: path to a staged service-account JSON key file
+# (set by deploy/remote-entrypoint.sh; empty/missing means GA4 querying
+# stays disabled - see the GA4 block below).
+: "${GA4_CREDENTIALS_STAGED:=}"
+: "${GA4_PROPERTY_ID:=}"
+: "${GA4_TOP_PAGES_LIMIT:=}"
 
 # DOMAIN, LETSENCRYPT_EMAIL: certbot's `-d`/`--email` for the cert.
 # CLOUDFLARE_API_TOKEN: Cloudflare API Token (not the legacy Global API Key)
@@ -44,6 +50,7 @@ done
 # partition, so all state lives under it.
 CERT_DIR="$STATE_DIR/letsencrypt"
 CLOUDFLARE_INI="$STATE_DIR/cloudflare.ini"
+GA4_CREDENTIALS_FILE="$STATE_DIR/ga4-credentials.json"
 # --------------------------------------------------------------------------
 
 mkdir -p "$CERT_DIR"
@@ -100,6 +107,31 @@ docker run -d \
   certbot/dns-cloudflare \
   -c 'trap exit TERM; while :; do certbot renew --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt-cloudflare.ini --dns-cloudflare-propagation-seconds 30 --non-interactive; sleep 12h & wait $!; done'
 
+# --- GA4 service-account credentials (optional) ---------------------------
+# Mirrors the TLS cert handling above: copied into persistent storage under
+# $STATE_DIR (not left in the staged copy under /tmp, which
+# remote-entrypoint.sh deletes right after this script exits) so it
+# survives container restarts without CI having to run again. Only mounted
+# into the app container when both a real staged key and GA4_PROPERTY_ID are
+# present; the app itself already treats a missing/blank
+# GOOGLE_APPLICATION_CREDENTIALS or GA4_PROPERTY_ID as "GA4 querying
+# disabled" (see src/ga4.rs), so leaving either unset here is safe, not
+# fatal.
+GA4_DOCKER_ARGS=()
+if [ -n "$GA4_CREDENTIALS_STAGED" ] && [ -s "$GA4_CREDENTIALS_STAGED" ] && [ -n "$GA4_PROPERTY_ID" ]; then
+  install -m 600 "$GA4_CREDENTIALS_STAGED" "$GA4_CREDENTIALS_FILE"
+  GA4_DOCKER_ARGS+=(
+    -v "$GA4_CREDENTIALS_FILE:/etc/ga4/credentials.json:ro"
+    -e GOOGLE_APPLICATION_CREDENTIALS=/etc/ga4/credentials.json
+    -e GA4_PROPERTY_ID="$GA4_PROPERTY_ID"
+  )
+  # Only passed through when set - src/ga4.rs already defaults to 50
+  # top pages on its own if this is left unset.
+  if [ -n "$GA4_TOP_PAGES_LIMIT" ]; then
+    GA4_DOCKER_ARGS+=(-e GA4_TOP_PAGES_LIMIT="$GA4_TOP_PAGES_LIMIT")
+  fi
+fi
+
 # --- App container -------------------------------------------------------
 # Stops+removes whatever was previously running under this name before
 # starting the new image - an in-place update, not a fresh install - and
@@ -116,6 +148,7 @@ docker run -d \
   -e TLS_PORT="$CONTAINER_TLS_PORT" \
   -e TLS_CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem" \
   -e TLS_KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem" \
+  "${GA4_DOCKER_ARGS[@]}" \
   -p "$HTTP_PORT:$CONTAINER_PORT" \
   -p "$HTTPS_PORT:$CONTAINER_TLS_PORT" \
   "$IMAGE_NAME:latest"

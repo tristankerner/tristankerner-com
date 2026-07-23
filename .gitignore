@@ -1,3 +1,8 @@
 /target
 .idea
 .env
+
+# GCP service-account key(s) for local GA4 testing (see .env.example) -
+# never committed, regardless of where they're placed.
+ga4-credentials.json
+*service-account*.json

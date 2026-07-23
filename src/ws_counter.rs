@@ -1,3 +1,4 @@
+use crate::ga4::{self, Ga4Config};
 use actix_web::http::header;
 use actix_web::{Error, HttpRequest, HttpResponse, Result, rt, web};
 use actix_ws::AggregatedMessage;
@@ -20,10 +21,10 @@ const MAX_WS_MESSAGE_SIZE: usize = 1024;
 // a watch receiver, so the cap is about resource ceiling, not throughput.
 const MAX_WS_SESSIONS: usize = 256;
 
-// TODO(GA integration): this hardcoded list stands in for the set of pages Google
-// Analytics knows about. Once the scheduled job below calls the GA Data API, the
-// paths themselves (not just their counts) should come from that response instead
-// of being seeded here.
+// Only used for the dev/test fallback ticker (see `spawn_visitor_ticker`)
+// and the state served before the first tick; in production the page list
+// itself comes from GA4 (top pages by traffic - see src/ga4.rs), not from
+// a fixed set tracked here.
 const SEED_PATHS: &[&str] = &["/", "/about-me"];
 
 #[derive(Serialize)]
@@ -180,20 +181,51 @@ pub(crate) async fn handle(
     Ok(response)
 }
 
-fn spawn_visitor_ticker(tx: watch::Sender<String>, mut counters: Vec<PathVisitorCount>) {
+// Querying GA4 costs quota and needs a service-account key, so it only ever
+// happens in production (APP_ENV=production). Any other value - including
+// unset, which covers local dev and the test suite - keeps the ticker on
+// its local-increment fallback below.
+fn is_production() -> bool {
+    std::env::var("APP_ENV").is_ok_and(|value| value == "production")
+}
+
+// Turns GA4's (path, total users) pairs into the wire format, preserving
+// their order (top pages first - see src/ga4.rs). Pure and separate from
+// the ticker loop so it's unit-testable without a real GA4 response.
+fn counters_from_top_pages(top_pages: Vec<(String, u64)>) -> Vec<PathVisitorCount> {
+    top_pages
+        .into_iter()
+        .map(|(path, total_unique_visitors)| PathVisitorCount {
+            path,
+            total_unique_visitors,
+        })
+        .collect()
+}
+
+fn spawn_visitor_ticker(
+    tx: watch::Sender<String>,
+    mut counters: Vec<PathVisitorCount>,
+    ga4_config: Option<Ga4Config>,
+) {
     rt::spawn(async move {
         let mut interval = rt::time::interval(VISITOR_TICK_INTERVAL);
         loop {
             interval.tick().await;
 
-            // TODO(GA integration): replace this block with a call to the Google
-            // Analytics Data API (`runReport`, grouped by `pagePath`, metric
-            // `totalUsers` or `activeUsers`), then set each `total_unique_visitors`
-            // to the value GA returns for that path instead of incrementing locally.
-            // `counters` is only ever touched from this task, so no locking is needed
-            // here even after that change.
-            for counter in counters.iter_mut() {
-                counter.total_unique_visitors += 1;
+            // `counters` is only ever touched from this task, so no locking is
+            // needed in either branch below.
+            match &ga4_config {
+                Some(config) => match ga4::fetch_top_pages(config).await {
+                    Ok(top_pages) => counters = counters_from_top_pages(top_pages),
+                    Err(e) => eprintln!("visitor ticker: failed to fetch GA4 top pages: {e}"),
+                },
+                // Dev/test fallback: no GA4 credentials are required locally,
+                // so simulate traffic by incrementing every path each tick.
+                None => {
+                    for counter in counters.iter_mut() {
+                        counter.total_unique_visitors += 1;
+                    }
+                }
             }
 
             let _ = tx.send(counters_json(&counters));
@@ -210,8 +242,16 @@ pub(crate) fn start() -> watch::Sender<String> {
         })
         .collect();
 
+    let ga4_config = is_production().then(Ga4Config::from_env).flatten();
+    if is_production() && ga4_config.is_none() {
+        eprintln!(
+            "visitor ticker: APP_ENV=production but GOOGLE_APPLICATION_CREDENTIALS/GA4_PROPERTY_ID \
+             are not both set; visitor counts will not update"
+        );
+    }
+
     let (tx, _rx) = watch::channel(counters_json(&initial_counters));
-    spawn_visitor_ticker(tx.clone(), initial_counters);
+    spawn_visitor_ticker(tx.clone(), initial_counters, ga4_config);
     tx
 }
 
@@ -238,6 +278,58 @@ mod tests {
             counters_json(&counters),
             r#"[{"path":"/","total_unique_visitors":3},{"path":"/about-me","total_unique_visitors":0}]"#
         );
+    }
+
+    // std::env::set_var/remove_var are unsafe as of the 2024 edition, and
+    // APP_ENV is process-wide state shared by every test here - hence the
+    // small unsafe wrappers plus #[serial] on every test that touches it.
+    fn set_env(key: &str, value: &str) {
+        unsafe { std::env::set_var(key, value) };
+    }
+
+    fn remove_env(key: &str) {
+        unsafe { std::env::remove_var(key) };
+    }
+
+    #[test]
+    #[serial(app_env)]
+    fn is_production_is_false_when_app_env_is_unset() {
+        remove_env("APP_ENV");
+        assert!(!is_production());
+    }
+
+    #[test]
+    #[serial(app_env)]
+    fn is_production_is_true_when_app_env_is_production() {
+        set_env("APP_ENV", "production");
+        assert!(is_production());
+        remove_env("APP_ENV");
+    }
+
+    #[test]
+    #[serial(app_env)]
+    fn is_production_is_false_for_any_other_app_env_value() {
+        set_env("APP_ENV", "development");
+        assert!(!is_production());
+        remove_env("APP_ENV");
+    }
+
+    #[test]
+    fn counters_from_top_pages_preserves_order_and_fields() {
+        let top_pages = vec![("/".to_string(), 42), ("/about-me".to_string(), 7)];
+
+        let counters = counters_from_top_pages(top_pages);
+
+        assert_eq!(counters.len(), 2);
+        assert_eq!(counters[0].path, "/");
+        assert_eq!(counters[0].total_unique_visitors, 42);
+        assert_eq!(counters[1].path, "/about-me");
+        assert_eq!(counters[1].total_unique_visitors, 7);
+    }
+
+    #[test]
+    fn counters_from_top_pages_is_empty_for_an_empty_input() {
+        assert!(counters_from_top_pages(Vec::new()).is_empty());
     }
 
     #[test]
