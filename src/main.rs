@@ -40,11 +40,18 @@ async fn main() -> std::io::Result<()> {
     );
     drop(db_conn);
 
+    // Shared between the short-term writer, the daily GA4 sync, and the
+    // combined-total ticker (all in different tasks/modules) so any of them
+    // can wake the ticker up between its scheduled ticks - see
+    // ws_counter::spawn_combined_ticker.
+    let refresh = Arc::new(tokio::sync::Notify::new());
+
     let tracker = web::Data::new(store::VisitorTracker {
-        sender: store::spawn_writer(db_path.clone()),
+        sender: store::spawn_writer(db_path.clone(), refresh.clone()),
         hash_secret,
     });
-    let tx = web::Data::new(ws_counter::start(db_path));
+    let tx = web::Data::new(ws_counter::start(db_path, refresh.clone()));
+    let refresh = web::Data::new(refresh);
 
     let tls_config = tls::server_config()?;
     let tls_enabled = tls_config.is_some();
@@ -68,6 +75,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(tx.clone())
             .app_data(tracker.clone())
+            .app_data(refresh.clone())
             .wrap(headers)
             .route("/ws-counter", web::get().to(ws_counter::handle))
             // Everything else is the static SvelteKit build (assets, prerendered

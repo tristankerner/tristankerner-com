@@ -3,8 +3,9 @@ use rusqlite::{Connection, OptionalExtension, params};
 use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{Notify, mpsc};
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -313,14 +314,16 @@ const MAX_BATCH_SIZE: usize = 500;
 // sender for callers (the page-serve hook) to push events into. Runs on a
 // blocking-pool thread since rusqlite is synchronous; `try_send` from an
 // async context is still non-blocking, satisfying the "never slow down a
-// page response" requirement.
-pub(crate) fn spawn_writer(db_path: PathBuf) -> mpsc::Sender<ShortTermVisit> {
+// page response" requirement. `refresh` is notified after each batch
+// commits, so the visitor ticker (src/ws_counter.rs) can pick up a fresh
+// hit right away instead of waiting for its next scheduled tick.
+pub(crate) fn spawn_writer(db_path: PathBuf, refresh: Arc<Notify>) -> mpsc::Sender<ShortTermVisit> {
     let (tx, rx) = mpsc::channel(WRITE_QUEUE_CAPACITY);
-    tokio::task::spawn_blocking(move || writer_loop(&db_path, rx));
+    tokio::task::spawn_blocking(move || writer_loop(&db_path, rx, &refresh));
     tx
 }
 
-fn writer_loop(db_path: &Path, mut rx: mpsc::Receiver<ShortTermVisit>) {
+fn writer_loop(db_path: &Path, mut rx: mpsc::Receiver<ShortTermVisit>, refresh: &Notify) {
     let mut conn = match open(db_path) {
         Ok(conn) => conn,
         Err(e) => {
@@ -343,11 +346,12 @@ fn writer_loop(db_path: &Path, mut rx: mpsc::Receiver<ShortTermVisit>) {
             }
         }
 
-        if let Err(e) = insert_short_term_visits(&mut conn, &batch) {
-            eprintln!(
+        match insert_short_term_visits(&mut conn, &batch) {
+            Ok(()) => refresh.notify_one(),
+            Err(e) => eprintln!(
                 "visitor tracker: failed to write a batch of {} visit(s): {e}",
                 batch.len()
-            );
+            ),
         }
         batch.clear();
     }
@@ -611,7 +615,7 @@ mod tests {
         // handing the same path to the background writer.
         open(&path).unwrap();
 
-        let sender = spawn_writer(path.clone());
+        let sender = spawn_writer(path.clone(), Arc::new(Notify::new()));
         for i in 0..5 {
             sender
                 .send(visit("2026-01-01", "/", &format!("visitor-{i}")))
@@ -635,6 +639,25 @@ mod tests {
             );
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
+    }
+
+    #[tokio::test]
+    async fn spawn_writer_notifies_refresh_after_a_batch_is_written() {
+        let (_dir, path) = temp_db();
+        open(&path).unwrap();
+        let refresh = Arc::new(Notify::new());
+
+        let sender = spawn_writer(path.clone(), refresh.clone());
+        sender
+            .send(visit("2026-01-01", "/", "alice"))
+            .await
+            .unwrap();
+
+        // Times out (panicking the test) rather than hanging forever if the
+        // writer never notifies after committing a batch.
+        tokio::time::timeout(std::time::Duration::from_secs(5), refresh.notified())
+            .await
+            .expect("writer did not notify after writing a batch");
     }
 
     #[test]

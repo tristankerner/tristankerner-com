@@ -8,9 +8,10 @@ use futures_util::StreamExt as _;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -115,6 +116,7 @@ pub(crate) async fn handle(
     req: HttpRequest,
     body: web::Payload,
     tx: web::Data<watch::Sender<String>>,
+    refresh: web::Data<Arc<Notify>>,
 ) -> Result<HttpResponse, Error> {
     if !same_origin(&req) {
         return Ok(HttpResponse::Forbidden().finish());
@@ -123,6 +125,12 @@ pub(crate) async fn handle(
     let Some(slot) = SessionSlot::try_acquire() else {
         return Ok(HttpResponse::ServiceUnavailable().finish());
     };
+
+    // Wakes the ticker (see spawn_combined_ticker) so a fresh visitor sees
+    // real counts promptly instead of whatever was last broadcast - which,
+    // right after a cold start, can be nothing at all for up to a full
+    // VISITOR_TICK_INTERVAL_MINUTES.
+    refresh.notify_one();
 
     let (response, mut session, msg_stream) = actix_ws::handle(&req, body)?;
 
@@ -247,14 +255,28 @@ fn combine_totals(
     counters
 }
 
-fn spawn_combined_ticker(tx: watch::Sender<String>, db_path: PathBuf, tick_interval: Duration) {
+// `refresh` lets callers (a new WS connection, a short-term-visit batch
+// write, a completed daily sync) wake this up between scheduled ticks, so
+// fresh data shows up promptly instead of waiting for the next fixed
+// interval - which, right after a cold start with nobody connected yet,
+// would otherwise waste the very first tick and leave the *next* visitor
+// waiting up to a full tick_interval for anything to appear at all.
+fn spawn_combined_ticker(
+    tx: watch::Sender<String>,
+    db_path: PathBuf,
+    tick_interval: Duration,
+    refresh: Arc<Notify>,
+) {
     rt::spawn(async move {
         let mut interval = rt::time::interval(tick_interval);
         loop {
-            interval.tick().await;
+            tokio::select! {
+                _ = interval.tick() => {}
+                _ = refresh.notified() => {}
+            }
 
             // Nobody's watching the counter right now, so skip the database
-            // read and the broadcast entirely - the next tick checks again.
+            // read and the broadcast entirely - the next wakeup checks again.
             if !has_active_sessions() {
                 continue;
             }
@@ -325,13 +347,14 @@ fn next_sync_range(
     (start <= yesterday).then_some((start, yesterday))
 }
 
-fn spawn_ga4_daily_sync(db_path: PathBuf, config: Ga4Config) {
+fn spawn_ga4_daily_sync(db_path: PathBuf, config: Ga4Config, refresh: Arc<Notify>) {
     rt::spawn(async move {
         let mut interval = rt::time::interval(DAILY_SYNC_INTERVAL);
         loop {
             interval.tick().await;
-            if let Err(e) = run_daily_sync(&db_path, &config).await {
-                eprintln!("visitor ticker: GA4 daily sync failed: {e}");
+            match run_daily_sync(&db_path, &config).await {
+                Ok(()) => refresh.notify_one(),
+                Err(e) => eprintln!("visitor ticker: GA4 daily sync failed: {e}"),
             }
         }
     });
@@ -375,12 +398,12 @@ async fn run_daily_sync(db_path: &Path, config: &Ga4Config) -> Result<(), DailyS
     Ok(())
 }
 
-pub(crate) fn start(db_path: PathBuf) -> watch::Sender<String> {
+pub(crate) fn start(db_path: PathBuf, refresh: Arc<Notify>) -> watch::Sender<String> {
     let (tx, _rx) = watch::channel(counters_json(&[]));
 
     if is_production() {
         match Ga4Config::from_env() {
-            Some(config) => spawn_ga4_daily_sync(db_path.clone(), config),
+            Some(config) => spawn_ga4_daily_sync(db_path.clone(), config, refresh.clone()),
             None => eprintln!(
                 "visitor ticker: APP_ENV=production but GOOGLE_APPLICATION_CREDENTIALS/GA4_PROPERTY_ID \
                  are not both set; the long-term visitor totals will not update"
@@ -388,7 +411,7 @@ pub(crate) fn start(db_path: PathBuf) -> watch::Sender<String> {
         }
     }
 
-    spawn_combined_ticker(tx.clone(), db_path, visitor_tick_interval());
+    spawn_combined_ticker(tx.clone(), db_path, visitor_tick_interval(), refresh);
     tx
 }
 
@@ -649,7 +672,12 @@ mod tests {
         let _slot = SessionSlot::try_acquire().expect("should have room");
 
         let (tx, rx) = watch::channel(counters_json(&[]));
-        spawn_combined_ticker(tx, db_path, Duration::from_millis(20));
+        spawn_combined_ticker(
+            tx,
+            db_path,
+            Duration::from_millis(20),
+            Arc::new(Notify::new()),
+        );
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
@@ -659,6 +687,60 @@ mod tests {
             assert!(
                 std::time::Instant::now() < deadline,
                 "ticker did not broadcast the combined total in time"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    }
+
+    // Regression test for the actual reported bug: a fixed-interval-only
+    // ticker wastes its first (immediate) tick at startup, before anyone's
+    // connected - so the *next* visitor would otherwise wait up to a full
+    // tick_interval (here, deliberately 1 hour, far past the test timeout)
+    // for anything to appear. Spawns with no session active (so that first
+    // tick genuinely no-ops, confirmed below) and only later acquires a
+    // session and notifies - the update can then only be explained by
+    // refresh.notify_one() waking the ticker early, not by the schedule.
+    #[actix_web::test]
+    #[serial(ws_sessions)]
+    async fn spawn_combined_ticker_refreshes_immediately_on_notify() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("visitors.db");
+        {
+            let mut conn = store::open(&db_path).unwrap();
+            store::replace_all_time_visitors(
+                &mut conn,
+                &[("/".to_string(), 7)],
+                date("2026-01-01"),
+            )
+            .unwrap();
+        }
+
+        let (tx, rx) = watch::channel(counters_json(&[]));
+        let refresh = Arc::new(Notify::new());
+        spawn_combined_ticker(tx, db_path, Duration::from_secs(3600), refresh.clone());
+
+        // Give the ticker's own immediate first tick a chance to run and
+        // confirm it did nothing (no session yet), isolating the update
+        // below from that startup tick rather than relying on the 1-hour
+        // interval alone to rule it out.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert_eq!(
+            rx.borrow().clone(),
+            "[]",
+            "no session was active yet, so the startup tick should not have broadcast anything"
+        );
+
+        let _slot = SessionSlot::try_acquire().expect("should have room");
+        refresh.notify_one();
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if rx.borrow().contains(r#""total_unique_visitors":7"#) {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "ticker did not refresh promptly after being notified"
             );
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
@@ -770,7 +852,7 @@ mod tests {
         // from sqlite; start() itself just seeds an empty snapshot and
         // spawns the background tasks that will fill it in.
         let dir = tempfile::tempdir().unwrap();
-        let tx = start(dir.path().join("visitors.db"));
+        let tx = start(dir.path().join("visitors.db"), Arc::new(Notify::new()));
         let rx = tx.subscribe();
 
         assert_eq!(rx.borrow().clone(), "[]");
@@ -787,12 +869,18 @@ mod tests {
         use awc::ws::{Frame, Message};
         use futures_util::{SinkExt, StreamExt};
 
+        fn test_refresh_data() -> web::Data<Arc<Notify>> {
+            web::Data::new(Arc::new(Notify::new()))
+        }
+
         fn test_app_with_channel() -> (actix_test::TestServer, watch::Sender<String>) {
             let (tx, _rx) = watch::channel(counters_json(&[]));
             let data = web::Data::new(tx.clone());
+            let refresh = test_refresh_data();
             let srv = actix_test::start(move || {
                 App::new()
                     .app_data(data.clone())
+                    .app_data(refresh.clone())
                     .route("/ws-counter", web::get().to(handle))
             });
             (srv, tx)
@@ -806,9 +894,11 @@ mod tests {
             }];
             let (tx, _rx) = watch::channel(counters_json(&counters));
             let data = web::Data::new(tx);
+            let refresh = test_refresh_data();
             let mut srv = actix_test::start(move || {
                 App::new()
                     .app_data(data.clone())
+                    .app_data(refresh.clone())
                     .route("/ws-counter", web::get().to(handle))
             });
 
