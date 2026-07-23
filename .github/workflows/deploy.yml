@@ -215,6 +215,10 @@ jobs:
           umask 077
           printf '%s' "$GA4_CREDENTIALS_JSON" > ga4-credentials.json
 
+      - name: Install NumPy for gcloud IAP
+        run: |
+          PYTHON_LOC=$(gcloud info --format="value(basic.python_location)")
+          $PYTHON_LOC -m pip install numpy
       # GCP_PROJECT_ID / GCP_ZONE / GCP_INSTANCE_NAME: identify the target
       # VM. GCP_ZONE/GCP_INSTANCE_NAME also used by the two steps below.
       - name: Stage deploy files on the VM
@@ -227,12 +231,14 @@ jobs:
             --project "$GCP_PROJECT_ID" \
             --zone "$GCP_ZONE" \
             --tunnel-through-iap \
+            --quiet \
             --command "mkdir -p /tmp/tristankerner-deploy"
 
           gcloud compute scp \
             --project "$GCP_PROJECT_ID" \
             --zone "$GCP_ZONE" \
             --tunnel-through-iap \
+            --quiet \
             image.tar.gz deploy/run.sh deploy/remote-entrypoint.sh deploy.env ga4-credentials.json \
             "$GCP_INSTANCE_NAME:/tmp/tristankerner-deploy/"
 
