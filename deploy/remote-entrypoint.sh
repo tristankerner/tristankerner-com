@@ -23,5 +23,8 @@ set +a
 
 export IMAGE_TAR="$STAGE_DIR/image.tar.gz"
 export GA4_CREDENTIALS_STAGED="$STAGE_DIR/ga4-credentials.json"
-chmod +x "$STAGE_DIR/run.sh"
-"$STAGE_DIR/run.sh"
+
+# Run via `bash` rather than executing directly: Container-Optimized OS
+# mounts /tmp noexec, so a direct exec() of a staged file here always
+# fails with "Permission denied" (126) regardless of its permission bits.
+bash "$STAGE_DIR/run.sh"
