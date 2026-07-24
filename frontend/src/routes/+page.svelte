@@ -55,8 +55,8 @@
                 Welcome — this is where I write about the software I build and the problems I run into along the way.
             </p>
             <div class="mt-6 flex flex-wrap justify-center gap-3 sm:justify-start">
-                <Button href="/blog" color="primary">Read the Blog</Button>
-                <Button href="/about-me" color="alternative">About Me</Button>
+                <Button href="/about-me" color="primary">About Me</Button>
+                <Button href="/blog" color="alternative">Read the Blog</Button>
             </div>
         </div>
     </section>
