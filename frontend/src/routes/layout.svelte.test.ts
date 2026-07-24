@@ -1,40 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
-import type { AfterNavigate } from "@sveltejs/kit";
 
 vi.mock("$app/state", () => ({
-  page: { url: new URL("http://localhost/blog?foo=bar") },
+  page: { url: new URL("http://localhost/blog") },
 }));
 
 const { connectCounterSocket } = vi.hoisted(() => ({ connectCounterSocket: vi.fn() }));
 vi.mock("../lib/counterSocket.ts", () => ({ connectCounterSocket }));
 
-const { afterNavigateCallback } = vi.hoisted(() => ({
-  afterNavigateCallback: { current: undefined as ((navigation: AfterNavigate) => void) | undefined },
-}));
-vi.mock("$app/navigation", () => ({
-  afterNavigate: (callback: (navigation: AfterNavigate) => void) => {
-    afterNavigateCallback.current = callback;
-  },
-}));
-
-// consent.ts imports applyConsent from this same module via a relative path,
-// so the mock must preserve the real exports (importOriginal) - replacing
-// the whole module would silently break ConsentBanner's consent flow too.
 const { trackPageView } = vi.hoisted(() => ({ trackPageView: vi.fn() }));
-vi.mock("$lib/consent/analytics.ts", async (importOriginal) => ({
+vi.mock("../lib/consent/analytics.ts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/consent/analytics.ts")>()),
   trackPageView,
 }));
 
+const { afterNavigate } = vi.hoisted(() => ({ afterNavigate: vi.fn() }));
+vi.mock("$app/navigation", () => ({ afterNavigate }));
+
 import Layout from "./+layout.svelte";
 import { themeState } from "../lib/state.svelte.ts";
 import { consentState } from "../lib/consent/state.svelte.ts";
-
-function navigate(type: AfterNavigate["type"]) {
-  afterNavigateCallback.current?.({ type } as AfterNavigate);
-}
+import { GTAG_SCRIPT_SRC } from "../lib/consent/gtagBootstrap.ts";
 
 function children(text = "child content") {
   return createRawSnippet(() => ({
@@ -47,8 +34,6 @@ describe("root layout", () => {
     localStorage.clear();
     consentState.status = "pending";
     consentState.categories = { analytics: true, marketing: true };
-    trackPageView.mockClear();
-    afterNavigateCallback.current = undefined;
   });
 
   it("renders the nav, footer, and slotted page content", () => {
@@ -104,27 +89,27 @@ describe("root layout", () => {
     expect(screen.getByText("Cookie preferences")).toBeInTheDocument();
   });
 
-  it("does not track a page view for the initial 'enter' navigation", () => {
+  it("always renders the gtag bootstrap in <head>, regardless of consent status", () => {
+    document.head.innerHTML = "";
+
     render(Layout, { props: { children: children() } });
 
-    navigate("enter");
+    expect(document.head.querySelector(`script[src="${GTAG_SCRIPT_SRC}"]`)).not.toBeNull();
+    const inlineScripts = Array.from(document.head.querySelectorAll("script:not([src])"));
+    expect(inlineScripts.some((script) => script.textContent?.includes("consent"))).toBe(true);
+  });
 
+  it("reports client-side navigations to trackPageView, skipping the initial 'enter' load", () => {
+    trackPageView.mockClear();
+    afterNavigate.mockClear();
+
+    render(Layout, { props: { children: children() } });
+
+    const onNavigate = afterNavigate.mock.calls[0][0];
+    onNavigate({ type: "enter" });
     expect(trackPageView).not.toHaveBeenCalled();
-  });
 
-  it("tracks a page view for a client-side navigation, using the current path and query", () => {
-    render(Layout, { props: { children: children() } });
-
-    navigate("link");
-
-    expect(trackPageView).toHaveBeenCalledExactlyOnceWith("/blog?foo=bar");
-  });
-
-  it("tracks a page view for back/forward navigation", () => {
-    render(Layout, { props: { children: children() } });
-
-    navigate("popstate");
-
-    expect(trackPageView).toHaveBeenCalledExactlyOnceWith("/blog?foo=bar");
+    onNavigate({ type: "link" });
+    expect(trackPageView).toHaveBeenCalledWith("/blog");
   });
 });

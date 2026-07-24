@@ -4,13 +4,14 @@
     import { onMount } from 'svelte';
     import { afterNavigate } from '$app/navigation';
     import { page } from "$app/state";
-    import { trackPageView } from "$lib/consent/analytics.ts";
+    import { trackPageView } from "../lib/consent/analytics.ts";
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
     import logo from '$lib/assets/logo.svg';
     import logo_inverted from '$lib/assets/logo-inverted.svg';
     import Counter from "$lib/Counter.svelte";
     import ConsentBanner from "$lib/consent/ConsentBanner.svelte";
+    import { GTAG_BOOTSTRAP_SCRIPT, GTAG_SCRIPT_SRC } from "../lib/consent/gtagBootstrap.ts";
     import { Navbar, NavBrand, NavLi, NavUl, NavHamburger,  DarkMode, Footer, FooterCopyright, FooterLinkGroup, FooterLink } from "flowbite-svelte";
     import { LinkedinSolid,  GithubSolid } from "flowbite-svelte-icons";
 
@@ -48,7 +49,15 @@
     });
 </script>
 
-<svelte:head><link rel="icon" href={favicon} /></svelte:head>
+<svelte:head>
+  <link rel="icon" href={favicon} />
+  <!-- Always present regardless of consent - see gtagBootstrap.ts. Rendered
+       here (not from app logic) so prerendering bakes it into the static
+       HTML <head>, ahead of hydration, per Google's Consent Mode ordering
+       requirements. -->
+  {@html `<script>${GTAG_BOOTSTRAP_SCRIPT}</script>`}
+  <script async src={GTAG_SCRIPT_SRC}></script>
+</svelte:head>
 <div class="sticky top-0 z-50 w-full border-b border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
     <Navbar fluid>
         <NavBrand href="/">

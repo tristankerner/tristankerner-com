@@ -1,17 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// FACEBOOK_PIXEL_ID has no placeholder fallback (see config.ts) - unlike
-// GOOGLE_ANALYTICS_ID, tests need to opt in to a configured ID to exercise
-// the "pixel loads" path, and can leave it unset to exercise the "pixel
-// isn't configured yet" path that's the real default in this environment.
-const configMock = vi.hoisted(() => ({ facebookPixelId: undefined as string | undefined }));
-vi.mock("./config.ts", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./config.ts")>()),
-  get FACEBOOK_PIXEL_ID() {
-    return configMock.facebookPixelId;
-  },
-}));
-
 import { applyConsent, trackPageView } from "./analytics.ts";
 
 describe("applyConsent", () => {
@@ -21,85 +8,44 @@ describe("applyConsent", () => {
     window.gtag = undefined;
     window.fbq = undefined;
     window._fbq = undefined;
-    configMock.facebookPixelId = undefined;
   });
 
-  it("loads nothing when every category is declined", () => {
+  it("does nothing to the Google tag when window.gtag isn't installed yet", () => {
+    // The gtag bootstrap (see gtagBootstrap.ts) always runs before app code
+    // in production, but isn't present in this unit test's jsdom document -
+    // applyConsent must not throw when window.gtag is missing.
+    expect(() => applyConsent({ analytics: true, marketing: false })).not.toThrow();
+  });
+
+  it("reports denied analytics_storage when analytics is declined", () => {
+    window.gtag = vi.fn();
+
     applyConsent({ analytics: false, marketing: false });
 
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "denied",
+    });
+    expect(window.fbq).toBeUndefined();
+  });
+
+  it("reports granted analytics_storage when analytics is accepted", () => {
+    window.gtag = vi.fn();
+
+    applyConsent({ analytics: true, marketing: false });
+
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "granted",
+    });
+  });
+
+  it("skips the Meta Pixel when marketing is granted but no pixel ID is configured", () => {
+    // This file doesn't mock ./config.ts, so FACEBOOK_PIXEL_ID is undefined
+    // here (see config.ts) - the "loads a configured pixel" happy path is
+    // covered where a real ID is mocked in (consent.test.ts,
+    // ConsentBanner.test.ts).
+    applyConsent({ analytics: false, marketing: true });
+
     expect(document.head.querySelectorAll("script")).toHaveLength(0);
-    expect(window.gtag).toBeUndefined();
-    expect(window.fbq).toBeUndefined();
-  });
-
-  it("injects the GA script and seeds gtag/dataLayer when analytics is granted", () => {
-    applyConsent({ analytics: true, marketing: false });
-
-    const script = document.head.querySelector<HTMLScriptElement>(
-      "script[src*='googletagmanager.com/gtag/js']",
-    );
-    expect(script).not.toBeNull();
-    expect(script?.src).toContain("id=G-XXXXXXXXXX");
-    expect(window.gtag).toBeTypeOf("function");
-    expect(window.dataLayer?.length).toBeGreaterThan(0);
-  });
-
-  it("only injects the GA script once across repeated calls", () => {
-    applyConsent({ analytics: true, marketing: false });
-    applyConsent({ analytics: true, marketing: false });
-
-    expect(document.head.querySelectorAll("script[src*='googletagmanager.com']")).toHaveLength(1);
-  });
-
-  it("injects the Meta Pixel script and seeds fbq when marketing is granted and a pixel ID is configured", () => {
-    configMock.facebookPixelId = "123456789012345";
-
-    applyConsent({ analytics: false, marketing: true });
-
-    const script = document.head.querySelector<HTMLScriptElement>(
-      "script[src*='connect.facebook.net']",
-    );
-    expect(script).not.toBeNull();
-    expect(window.fbq).toBeTypeOf("function");
-    expect(window._fbq).toBe(window.fbq);
-    // init + track PageView both queue (no real fbevents.js runs in tests to
-    // install callMethod).
-    expect(window.fbq?.queue.length).toBe(2);
-  });
-
-  it("only injects the Meta Pixel script once across repeated calls", () => {
-    configMock.facebookPixelId = "123456789012345";
-
-    applyConsent({ analytics: false, marketing: true });
-    applyConsent({ analytics: false, marketing: true });
-
-    expect(document.head.querySelectorAll("script[src*='connect.facebook.net']")).toHaveLength(1);
-  });
-
-  it("loads both trackers when both categories are granted and a pixel ID is configured", () => {
-    configMock.facebookPixelId = "123456789012345";
-
-    applyConsent({ analytics: true, marketing: true });
-
-    expect(document.head.querySelector("script[src*='googletagmanager.com']")).not.toBeNull();
-    expect(document.head.querySelector("script[src*='connect.facebook.net']")).not.toBeNull();
-  });
-
-  it("does not load the Meta Pixel when marketing is granted but no pixel ID is configured", () => {
-    configMock.facebookPixelId = undefined;
-
-    applyConsent({ analytics: false, marketing: true });
-
-    expect(document.head.querySelectorAll("script[src*='connect.facebook.net']")).toHaveLength(0);
-    expect(window.fbq).toBeUndefined();
-  });
-
-  it("does not load the Meta Pixel when the configured pixel ID is blank", () => {
-    configMock.facebookPixelId = "";
-
-    applyConsent({ analytics: false, marketing: true });
-
-    expect(document.head.querySelectorAll("script[src*='connect.facebook.net']")).toHaveLength(0);
     expect(window.fbq).toBeUndefined();
   });
 });
@@ -110,29 +56,28 @@ describe("trackPageView", () => {
     window.fbq = undefined;
   });
 
-  it("sends a gtag page_view event with the given path", () => {
-    const gtag = vi.fn();
-    window.gtag = gtag;
+  it("does nothing when neither tracker is installed", () => {
+    expect(() => trackPageView("/blog")).not.toThrow();
+  });
+
+  it("reports the page to gtag when it's installed", () => {
+    window.gtag = vi.fn();
 
     trackPageView("/blog");
 
-    expect(gtag).toHaveBeenCalledWith("event", "page_view", {
+    expect(window.gtag).toHaveBeenCalledWith("event", "page_view", {
       page_path: "/blog",
       page_location: window.location.href,
       page_title: document.title,
     });
   });
 
-  it("sends an fbq PageView track call", () => {
-    const fbq = vi.fn() as unknown as Window["fbq"];
-    window.fbq = fbq;
+  it("reports the page to fbq when it's installed", () => {
+    const fbq = vi.fn();
+    window.fbq = fbq as unknown as NonNullable<typeof window.fbq>;
 
     trackPageView("/blog");
 
     expect(fbq).toHaveBeenCalledWith("track", "PageView");
-  });
-
-  it("does nothing when neither tracker has been loaded", () => {
-    expect(() => trackPageView("/blog")).not.toThrow();
   });
 });

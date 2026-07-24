@@ -1,5 +1,5 @@
 import type { ConsentCategories } from "./state.svelte.ts";
-import { FACEBOOK_PIXEL_ID, GOOGLE_ANALYTICS_ID } from "./config.ts";
+import { FACEBOOK_PIXEL_ID } from "./config.ts";
 
 type FbqFn = {
   (...args: unknown[]): void;
@@ -18,26 +18,22 @@ declare global {
   }
 }
 
-// IDs used to detect whether a script is already in the document, so calling
-// applyConsent() more than once (e.g. after changing preferences) never
-// injects either tracker twice.
-const GA_SCRIPT_ID = "consent-ga-script";
+// ID used to detect whether the pixel script is already in the document, so
+// calling applyConsent() more than once (e.g. after changing preferences)
+// never injects it twice.
 const PIXEL_SCRIPT_ID = "consent-fb-pixel-script";
 
-function loadGoogleAnalytics() {
-  if (document.getElementById(GA_SCRIPT_ID)) return;
-
-  const script = document.createElement("script");
-  script.id = GA_SCRIPT_ID;
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ANALYTICS_ID}`;
-  document.head.appendChild(script);
-
-  window.dataLayer = window.dataLayer ?? [];
-  const gtag = (...args: unknown[]) => window.dataLayer!.push(args);
-  window.gtag = gtag;
-  gtag("js", new Date());
-  gtag("config", GOOGLE_ANALYTICS_ID);
+// The Google tag itself is always loaded, with a denied-by-default consent
+// state set before it ever runs - see gtagBootstrap.ts, wired into the root
+// layout's <svelte:head>. This just reports the visitor's actual choice to
+// it, per https://developers.google.com/tag-platform/security/guides/consent.
+// `ad_storage`/`ad_user_data`/`ad_personalization` stay permanently denied -
+// this site has no Google Ads/Floodlight tag reading them; only
+// `analytics_storage` reflects the "analytics" toggle.
+function updateGoogleConsent(analyticsGranted: boolean) {
+  window.gtag?.("consent", "update", {
+    analytics_storage: analyticsGranted ? "granted" : "denied",
+  });
 }
 
 // Standard Meta Pixel bootstrap snippet, adapted for TypeScript. No-ops when
@@ -72,7 +68,7 @@ function loadFacebookPixel() {
 }
 
 export function applyConsent(categories: ConsentCategories) {
-  if (categories.analytics) loadGoogleAnalytics();
+  updateGoogleConsent(categories.analytics);
   if (categories.marketing) loadFacebookPixel();
 }
 

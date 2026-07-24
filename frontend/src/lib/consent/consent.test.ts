@@ -16,6 +16,7 @@ describe("consent", () => {
   beforeEach(() => {
     localStorage.clear();
     document.head.innerHTML = "";
+    window.gtag = vi.fn();
     consentState.status = "pending";
     consentState.categories = { analytics: true, marketing: true };
   });
@@ -34,7 +35,9 @@ describe("consent", () => {
 
     expect(consentState.status).toBe("decided");
     expect(consentState.categories).toEqual({ analytics: true, marketing: true });
-    expect(document.head.querySelector("script[src*='googletagmanager.com']")).not.toBeNull();
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "granted",
+    });
     expect(document.head.querySelector("script[src*='connect.facebook.net']")).not.toBeNull();
 
     const stored = JSON.parse(localStorage.getItem(CONSENT_STORAGE_KEY) ?? "null");
@@ -46,6 +49,9 @@ describe("consent", () => {
 
     expect(consentState.status).toBe("decided");
     expect(consentState.categories).toEqual({ analytics: false, marketing: false });
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "denied",
+    });
     expect(document.head.querySelectorAll("script")).toHaveLength(0);
   });
 
@@ -53,7 +59,9 @@ describe("consent", () => {
     savePreferences({ analytics: true, marketing: false });
 
     expect(consentState.categories).toEqual({ analytics: true, marketing: false });
-    expect(document.head.querySelector("script[src*='googletagmanager.com']")).not.toBeNull();
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "granted",
+    });
     expect(document.head.querySelector("script[src*='connect.facebook.net']")).toBeNull();
   });
 
@@ -67,7 +75,9 @@ describe("consent", () => {
 
     expect(consentState.status).toBe("decided");
     expect(consentState.categories).toEqual({ analytics: true, marketing: false });
-    expect(document.head.querySelector("script[src*='googletagmanager.com']")).not.toBeNull();
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "granted",
+    });
     expect(document.head.querySelector("script[src*='connect.facebook.net']")).toBeNull();
   });
 

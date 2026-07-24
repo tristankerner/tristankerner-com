@@ -19,7 +19,7 @@ describe("ConsentBanner", () => {
     localStorage.clear();
     document.head.innerHTML = "";
     window.dataLayer = undefined;
-    window.gtag = undefined;
+    window.gtag = vi.fn();
     window.fbq = undefined;
     window._fbq = undefined;
     consentState.status = "pending";
@@ -42,7 +42,9 @@ describe("ConsentBanner", () => {
     expect(consentState.status).toBe("decided");
     expect(consentState.categories).toEqual({ analytics: true, marketing: true });
     expect(screen.queryByRole("button", { name: "Accept All" })).not.toBeInTheDocument();
-    expect(document.head.querySelector("script[src*='googletagmanager.com']")).not.toBeNull();
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "granted",
+    });
     expect(document.head.querySelector("script[src*='connect.facebook.net']")).not.toBeNull();
 
     const stored = JSON.parse(localStorage.getItem(CONSENT_STORAGE_KEY) ?? "null");
@@ -56,6 +58,9 @@ describe("ConsentBanner", () => {
 
     expect(consentState.status).toBe("decided");
     expect(consentState.categories).toEqual({ analytics: false, marketing: false });
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "denied",
+    });
     expect(document.head.querySelectorAll("script")).toHaveLength(0);
   });
 
@@ -88,7 +93,9 @@ describe("ConsentBanner", () => {
 
     expect(consentState.status).toBe("decided");
     expect(consentState.categories).toEqual({ analytics: false, marketing: true });
-    expect(document.head.querySelector("script[src*='googletagmanager.com']")).toBeNull();
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "denied",
+    });
     expect(document.head.querySelector("script[src*='connect.facebook.net']")).not.toBeNull();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -132,6 +139,8 @@ describe("ConsentBanner", () => {
 
     expect(consentState.status).toBe("decided");
     expect(screen.queryByRole("button", { name: "Accept All" })).not.toBeInTheDocument();
-    expect(document.head.querySelector("script[src*='googletagmanager.com']")).not.toBeNull();
+    expect(window.gtag).toHaveBeenCalledWith("consent", "update", {
+      analytics_storage: "granted",
+    });
   });
 });
