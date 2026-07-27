@@ -36,6 +36,15 @@ fn sanitized_rel_path(request_path: &str) -> Option<PathBuf> {
     Some(rel)
 }
 
+// Old links to a since-removed standalone resume page now point visitors at
+// the resume section of the about-me page instead of a 404.
+fn redirect_target(request_path: &str) -> Option<&'static str> {
+    match request_path.trim_end_matches('/') {
+        "/resume" | "/live-resume" => Some("/about-me"),
+        _ => None,
+    }
+}
+
 // SvelteKit (adapter-static, prerender = true) emits one static HTML file per
 // route (e.g. `/about-me` -> `about-me.html`) plus a generic `404.html`
 // fallback (the adapter's `fallback` option, see frontend/vite.config.ts) for
@@ -124,6 +133,12 @@ pub(crate) async fn serve(
     if !matches!(*req.method(), Method::GET | Method::HEAD) {
         return Ok(HttpResponse::MethodNotAllowed()
             .insert_header((header::ALLOW, "GET, HEAD"))
+            .finish());
+    }
+
+    if let Some(location) = redirect_target(req.path()) {
+        return Ok(HttpResponse::MovedPermanently()
+            .insert_header((header::LOCATION, location))
             .finish());
     }
 
@@ -283,6 +298,24 @@ mod tests {
     fn sanitized_rel_path_rejects_empty_interior_segments() {
         // "/a//b" trims to "a//b", which splits into an empty middle segment.
         assert_eq!(sanitized_rel_path("/a//b"), None);
+    }
+
+    #[test]
+    fn redirect_target_matches_resume_paths() {
+        assert_eq!(redirect_target("/resume"), Some("/about-me"));
+        assert_eq!(redirect_target("/live-resume"), Some("/about-me"));
+    }
+
+    #[test]
+    fn redirect_target_trims_a_trailing_slash() {
+        assert_eq!(redirect_target("/resume/"), Some("/about-me"));
+        assert_eq!(redirect_target("/live-resume/"), Some("/about-me"));
+    }
+
+    #[test]
+    fn redirect_target_ignores_unrelated_paths() {
+        assert_eq!(redirect_target("/about-me"), None);
+        assert_eq!(redirect_target("/resumewriting"), None);
     }
 
     #[test]
@@ -449,6 +482,22 @@ mod tests {
             res.headers().get(header::CONTENT_TYPE).unwrap(),
             "text/html; charset=utf-8"
         );
+    }
+
+    #[actix_web::test]
+    async fn serve_redirects_resume_to_about_me() {
+        let req = TestRequest::get().uri("/resume").to_http_request();
+        let res = serve(req, test_tracker()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY);
+        assert_eq!(res.headers().get(header::LOCATION).unwrap(), "/about-me");
+    }
+
+    #[actix_web::test]
+    async fn serve_redirects_live_resume_to_about_me() {
+        let req = TestRequest::get().uri("/live-resume").to_http_request();
+        let res = serve(req, test_tracker()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY);
+        assert_eq!(res.headers().get(header::LOCATION).unwrap(), "/about-me");
     }
 
     #[actix_web::test]
