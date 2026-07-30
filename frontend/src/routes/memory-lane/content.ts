@@ -157,7 +157,7 @@ export const memories: MemoryEntry[] = [
     title: "Integrate-ism",
     slides: [
       {
-        text: "The time had come to move on, and a company called Turnberry said they needed and integration engineer for a place called Independent School Management--but I would have to learn an IPaaS system called Workato.",
+        text: "The time had come to move on, and a company called Turnberry said they needed an integration engineer for a place called Independent School Management--but I would have to learn an IPaaS system called Workato.",
         image: { src: workatoPuzzle, alt: "Puzzle pieces interlocking around a plug labeled with an API tag" },
       },
       {
