@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="An open toolbox with a data diamond for Databricks, an atom for React, a ribbon for Tailwind, and curly braces for C sharp, all fanned out like a Swiss army knife">
+  <rect width="400" height="300" fill="#223642" />
+  <path d="M0 260 L400 260 L400 300 L0 300 Z" fill="#1c2e38" />
+  <g transform="translate(120,170)">
+    <path d="M0 0 h160 l-14 60 h-132 z" fill="#3f5c6c" />
+    <rect x="55" y="-14" width="50" height="24" rx="4" fill="none" stroke="#3f5c6c" stroke-width="8" />
+  </g>
+  <!-- databricks diamond -->
+  <g transform="translate(150,110)">
+    <path d="M20 0 L40 20 L20 40 L0 20 Z" fill="#d9704f" />
+  </g>
+  <!-- react atom -->
+  <g transform="translate(200,95)" stroke="#6fb3d9" stroke-width="3" fill="none">
+    <ellipse rx="26" ry="10" />
+    <ellipse rx="26" ry="10" transform="rotate(60)" />
+    <ellipse rx="26" ry="10" transform="rotate(120)" />
+    <circle r="5" fill="#6fb3d9" stroke="none" />
+  </g>
+  <!-- tailwind ribbon -->
+  <g transform="translate(250,110)" fill="#5ad66d">
+    <path d="M0 10 q10 -14 20 0 q10 14 20 0 v10 q-10 14 -20 0 q-10 -14 -20 0 z" />
+  </g>
+  <!-- c# braces -->
+  <text x="290" y="118" font-family="monospace" font-weight="bold" font-size="26" fill="#c76b9c">{ }</text>
+</svg>

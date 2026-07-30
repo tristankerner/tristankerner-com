@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A speedometer needle pinned to fast, next to a network cable plug and a small globe trailing speed lines">
+  <rect width="400" height="300" fill="#2c4454" />
+  <!-- gauge -->
+  <g transform="translate(140,160)">
+    <path d="M-70 0 A70 70 0 0 1 70 0" stroke="#3f5c6c" stroke-width="14" fill="none" />
+    <path d="M-70 0 A70 70 0 0 1 20 -67" stroke="#5ad66d" stroke-width="14" fill="none" />
+    <line x1="0" y1="0" x2="50" y2="-45" stroke="#e8a33d" stroke-width="5" stroke-linecap="round" />
+    <circle cx="0" cy="0" r="8" fill="#e8a33d" />
+    <text x="0" y="-90" text-anchor="middle" font-family="monospace" font-size="16" fill="#5ad66d">FAST</text>
+  </g>
+  <!-- cable plug -->
+  <g transform="translate(250,110)">
+    <rect x="0" y="10" width="40" height="24" rx="3" fill="#d9704f" />
+    <rect x="40" y="16" width="14" height="12" fill="#d9704f" />
+    <rect x="-10" y="18" width="10" height="8" fill="#c76b9c" />
+  </g>
+  <!-- globe with speed lines -->
+  <circle cx="320" cy="190" r="28" fill="#6fb3d9" />
+  <path d="M292 190 h56 M320 162 v56 M300 172 q20 18 40 0 M300 208 q20 -18 40 0" stroke="#2c4454" stroke-width="2" fill="none" />
+  <path d="M240 190 h30 M235 200 h35 M245 180 h25" stroke="#e8a33d" stroke-width="3" stroke-linecap="round" opacity="0.7" />
+</svg>

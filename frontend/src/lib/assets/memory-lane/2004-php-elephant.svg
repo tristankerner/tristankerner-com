@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A small elephant wearing a party hat labeled five, standing beside a blog W icon, a speech bubble, and a MySQL database cylinder">
+  <rect width="400" height="300" fill="#223642" />
+  <path d="M0 245 L400 245 L400 300 L0 300 Z" fill="#1c2e38" />
+  <!-- elephant -->
+  <g transform="translate(60,110)">
+    <ellipse cx="60" cy="60" rx="55" ry="42" fill="#6fb3d9" />
+    <circle cx="115" cy="45" r="26" fill="#6fb3d9" />
+    <path d="M132 55 q18 10 8 40 q-10 6 -14 -6 q6 -18 -4 -30 z" fill="#6fb3d9" />
+    <circle cx="122" cy="38" r="4" fill="#16232c" />
+    <ellipse cx="20" cy="55" rx="16" ry="20" fill="#5a92b3" />
+    <path d="M100 20 l10 -22 6 4 -8 20 z" fill="#e8a33d" />
+    <circle cx="110" cy="0" r="4" fill="#d9704f" />
+  </g>
+  <!-- W blog icon -->
+  <g transform="translate(210,150)">
+    <circle cx="20" cy="20" r="24" fill="#e8a33d" />
+    <text x="20" y="27" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="20" fill="#16232c">W</text>
+  </g>
+  <!-- speech bubble phpBB -->
+  <path d="M270 90 h70 a8 8 0 0 1 8 8 v28 a8 8 0 0 1 -8 8 h-40 l-12 14 v-14 h-18 a8 8 0 0 1 -8 -8 v-28 a8 8 0 0 1 8 -8 z" fill="#c76b9c" />
+  <text x="305" y="112" text-anchor="middle" font-family="monospace" font-size="12" fill="#16232c">phpBB</text>
+  <!-- MySQL cylinder -->
+  <g transform="translate(280,190)">
+    <ellipse cx="30" cy="8" rx="30" ry="8" fill="#5ad66d" />
+    <rect x="0" y="8" width="60" height="26" fill="#4ab85c" />
+    <ellipse cx="30" cy="34" rx="30" ry="8" fill="#5ad66d" />
+  </g>
+</svg>

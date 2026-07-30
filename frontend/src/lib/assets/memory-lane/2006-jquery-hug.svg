@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A big friendly dollar sign wrapping its arms around a small DOM element box in a warm hug">
+  <rect width="400" height="300" fill="#1c2e38" />
+  <text x="140" y="200" font-family="monospace" font-weight="bold" font-size="180" fill="#5ad66d" opacity="0.95">$</text>
+  <g transform="translate(215,150)">
+    <rect x="0" y="0" width="90" height="60" rx="8" fill="#0d1a20" stroke="#6fb3d9" stroke-width="3" />
+    <text x="45" y="38" text-anchor="middle" font-family="monospace" font-size="16" fill="#6fb3d9">&lt;div&gt;</text>
+  </g>
+  <circle cx="330" cy="120" r="6" fill="#e8a33d">
+    <animate attributeName="cy" values="120;105;120" dur="1.4s" repeatCount="indefinite" />
+  </circle>
+  <path d="M310 100 q4 -10 14 -8" stroke="#e8a33d" stroke-width="2" fill="none" />
+  <path d="M320 95 q4 -10 14 -8" stroke="#e8a33d" stroke-width="2" fill="none" />
+</svg>

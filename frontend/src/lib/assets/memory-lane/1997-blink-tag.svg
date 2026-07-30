@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A boxy CRT monitor glowing with blinking HTML tags, tethered to a phone by a curly modem cord">
+  <rect width="400" height="300" fill="#16232c" />
+  <path d="M0 240 L400 240 L400 300 L0 300 Z" fill="#0f1a20" />
+  <!-- CRT monitor -->
+  <rect x="60" y="60" width="220" height="170" rx="10" fill="#3f5c6c" />
+  <rect x="78" y="78" width="184" height="120" rx="4" fill="#0d1a20" />
+  <rect x="130" y="230" width="80" height="18" fill="#3f5c6c" />
+  <rect x="110" y="248" width="120" height="12" rx="4" fill="#2c4454" />
+  <text x="170" y="130" text-anchor="middle" font-family="monospace" font-size="20" fill="#5ad66d">
+    &lt;blink&gt;
+    <animate attributeName="opacity" values="1;0;1" dur="1.1s" repeatCount="indefinite" />
+  </text>
+  <text x="170" y="160" text-anchor="middle" font-family="monospace" font-size="16" fill="#e8a33d">HTML</text>
+  <circle cx="255" cy="200" r="4" fill="#5ad66d" />
+  <!-- curly modem cord -->
+  <path d="M280 190 C 300 190, 290 170, 310 170 S 320 210, 340 200" stroke="#e8a33d" stroke-width="4" fill="none" stroke-linecap="round" />
+  <!-- phone handset -->
+  <g transform="translate(330,175)">
+    <rect x="0" y="0" width="55" height="26" rx="6" fill="#d9704f" />
+    <circle cx="10" cy="13" r="7" fill="#c76b9c" />
+    <circle cx="45" cy="13" r="7" fill="#c76b9c" />
+  </g>
+  <path d="M320 150 q6 8 0 16" stroke="#6fb3d9" stroke-width="3" fill="none" stroke-linecap="round" />
+  <path d="M330 145 q10 13 0 26" stroke="#6fb3d9" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7" />
+</svg>

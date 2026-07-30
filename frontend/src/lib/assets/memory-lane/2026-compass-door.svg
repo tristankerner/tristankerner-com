@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A door standing ajar with warm light spilling through, and a compass beside it with its needle pointing forward toward what is next">
+  <rect width="400" height="300" fill="#1c2e38" />
+  <!-- door with light -->
+  <g transform="translate(60,60)">
+    <rect x="0" y="0" width="120" height="190" fill="#3f5c6c" />
+    <path d="M120 0 L170 10 L170 180 L120 190 Z" fill="#e8a33d" opacity="0.9" />
+    <circle cx="150" cy="100" r="70" fill="#e8a33d" opacity="0.15" />
+  </g>
+  <!-- compass -->
+  <g transform="translate(290,160)">
+    <circle r="55" fill="#0d1a20" stroke="#6fb3d9" stroke-width="4" />
+    <text x="0" y="-38" text-anchor="middle" font-family="monospace" font-size="10" fill="#8aa2ab">N</text>
+    <text x="0" y="48" text-anchor="middle" font-family="monospace" font-size="10" fill="#8aa2ab">S</text>
+    <text x="-45" y="4" text-anchor="middle" font-family="monospace" font-size="10" fill="#8aa2ab">W</text>
+    <text x="45" y="4" text-anchor="middle" font-family="monospace" font-size="10" fill="#8aa2ab">E</text>
+    <path d="M0 0 L14 12 L0 -38 L-14 12 Z" fill="#d9704f">
+      <animateTransform attributeName="transform" type="rotate" values="0;18;-8;10;0" dur="3s" repeatCount="indefinite" />
+    </path>
+    <circle r="6" fill="#e8f0ee" />
+  </g>
+</svg>

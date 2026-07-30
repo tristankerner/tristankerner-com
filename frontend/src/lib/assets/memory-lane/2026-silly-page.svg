@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A winking browser window with a little heart in its address bar, surrounded by playful confetti, a self aware nod to this silly page">
+  <rect width="400" height="300" fill="#2c4454" />
+  <g transform="translate(90,60)">
+    <rect x="0" y="0" width="220" height="160" rx="8" fill="#0d1a20" stroke="#3f5c6c" stroke-width="4" />
+    <rect x="0" y="0" width="220" height="30" rx="8" fill="#3f5c6c" />
+    <circle cx="18" cy="15" r="5" fill="#d9704f" /><circle cx="36" cy="15" r="5" fill="#e8a33d" /><circle cx="54" cy="15" r="5" fill="#5ad66d" />
+    <!-- winking face made of DOM bits -->
+    <circle cx="75" cy="90" r="6" fill="#6fb3d9" />
+    <path d="M130 84 q10 8 20 0" stroke="#6fb3d9" stroke-width="4" fill="none" stroke-linecap="round" />
+    <path d="M95 115 q20 20 45 0" stroke="#e8a33d" stroke-width="5" fill="none" stroke-linecap="round" />
+    <path d="M60 60 C 55 52 44 60 60 74 C 76 60 65 52 60 60 Z" fill="#d9704f" />
+  </g>
+  <!-- confetti -->
+  <g>
+    <rect x="40" y="60" width="8" height="8" fill="#c76b9c" transform="rotate(20 44 64)" />
+    <rect x="340" y="90" width="8" height="8" fill="#5ad66d" transform="rotate(-15 344 94)" />
+    <circle cx="330" cy="200" r="5" fill="#e8a33d" />
+    <circle cx="55" cy="220" r="5" fill="#6fb3d9" />
+    <rect x="360" y="150" width="6" height="6" fill="#d9704f" />
+  </g>
+</svg>

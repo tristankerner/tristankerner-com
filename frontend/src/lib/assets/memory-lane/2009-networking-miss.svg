@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Two hands reaching for a handshake but just missing each other, with a question mark speech bubble, hinting at a missed sales opportunity">
+  <rect width="400" height="300" fill="#223642" />
+  <g>
+    <path d="M90 170 q40 -10 70 5 l20 14 -10 16 q-30 -14 -60 -10 -20 3 -20 -25 z" fill="#e8a33d" />
+    <path d="M310 170 q-40 -10 -70 5 l-20 14 10 16 q30 -14 60 -10 20 3 20 -25 z" fill="#6fb3d9" />
+  </g>
+  <g transform="translate(175,80)">
+    <path d="M0 30 h60 a10 10 0 0 1 10 10 v20 a10 10 0 0 1 -10 10 h-24 l-10 14 v-14 h-16 a10 10 0 0 1 -10 -10 v-20 a10 10 0 0 1 10 -10 z" fill="#c76b9c" />
+    <text x="35" y="58" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="22" fill="#16232c">?</text>
+  </g>
+  <path d="M180 200 q10 12 0 20" stroke="#6fb3d9" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7" />
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A box labeled WP connected by a dashed arrow of flowing data particles to a box labeled QuickBase, the first integration">
+  <rect width="400" height="300" fill="#223642" />
+  <g transform="translate(50,110)">
+    <rect width="110" height="80" rx="8" fill="#6fb3d9" />
+    <text x="55" y="48" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="22" fill="#16232c">WP</text>
+  </g>
+  <g transform="translate(240,110)">
+    <rect width="110" height="80" rx="8" fill="#e8a33d" />
+    <text x="55" y="48" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="18" fill="#16232c">QB</text>
+  </g>
+  <path d="M160 150 h80" stroke="#5ad66d" stroke-width="3" stroke-dasharray="8 6" fill="none">
+    <animate attributeName="stroke-dashoffset" from="28" to="0" dur="0.8s" repeatCount="indefinite" />
+  </path>
+  <path d="M232 143 l12 7 -12 7 z" fill="#5ad66d" />
+  <circle cx="180" cy="150" r="4" fill="#5ad66d"><animate attributeName="cx" values="165;235;165" dur="1.6s" repeatCount="indefinite" /></circle>
+</svg>

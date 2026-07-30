@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A leaning under construction sign for a family website with a tumbleweed rolling past and a cobweb in the corner">
+  <rect width="400" height="300" fill="#28404d" />
+  <path d="M0 250 L400 250 L400 300 L0 300 Z" fill="#1c2e38" />
+  <!-- sign post -->
+  <rect x="195" y="150" width="10" height="100" fill="#567585" />
+  <g transform="rotate(-6 200 150)">
+    <rect x="120" y="110" width="160" height="60" rx="4" fill="#e8a33d" />
+    <text x="200" y="148" text-anchor="middle" font-family="monospace" font-size="14" fill="#16232c">UNDER CONSTRUCTION</text>
+  </g>
+  <!-- tiny heart tag "for family" -->
+  <g transform="translate(90,200)">
+    <path d="M10 4 C4 -4 -6 4 10 18 C26 4 16 -4 10 4 Z" fill="#d9704f" />
+  </g>
+  <!-- tumbleweed -->
+  <g transform="translate(310,220)">
+    <circle cx="0" cy="0" r="16" fill="none" stroke="#6fae8f" stroke-width="2" />
+    <circle cx="0" cy="0" r="10" fill="none" stroke="#6fae8f" stroke-width="2" />
+    <path d="M-14 -6 L14 6 M-14 6 L14 -6 M-16 0 L16 0" stroke="#6fae8f" stroke-width="2" />
+    <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="2s" repeatCount="indefinite" additive="sum" />
+  </g>
+  <!-- cobweb -->
+  <path d="M340 60 L370 60 M340 60 L370 90 M340 60 L355 45 M348 60 A8 8 0 0 1 360 68 M344 60 A14 14 0 0 1 366 74" stroke="#8aa2ab" stroke-width="1.5" fill="none" opacity="0.8" />
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Puzzle pieces interlocking around a plug labeled Workato, representing learning a new IPaaS system">
+  <rect width="400" height="300" fill="#223642" />
+  <g fill="#6fb3d9">
+    <path d="M100 90 h60 v20 a15 15 0 0 1 0 30 v20 h-60 v-70 z" />
+    <path d="M160 90 h60 v70 h-60 v-20 a15 15 0 0 0 0 -30 z" fill="#5ad66d" />
+  </g>
+  <g fill="#c76b9c">
+    <path d="M100 160 h60 v70 h-60 v-20 a15 15 0 0 1 0 -30 z" />
+    <path d="M160 160 h60 v20 a15 15 0 0 0 0 30 v20 h-60 v-70 z" fill="#e8a33d" />
+  </g>
+  <g transform="translate(280,140)">
+    <rect x="0" y="10" width="46" height="30" rx="4" fill="#0d1a20" stroke="#5ad66d" stroke-width="3" />
+    <rect x="46" y="18" width="18" height="14" fill="#5ad66d" />
+    <rect x="-14" y="20" width="14" height="10" fill="#8aa2ab" />
+    <text x="23" y="30" text-anchor="middle" font-family="monospace" font-size="9" fill="#5ad66d">API</text>
+  </g>
+  <text x="330" y="80" text-anchor="middle" font-family="monospace" font-size="14" fill="#e8a33d">IPaaS</text>
+</svg>
