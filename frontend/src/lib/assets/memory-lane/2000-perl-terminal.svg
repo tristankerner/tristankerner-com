@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A terminal window running a Perl shebang line, with a small camel standing on top and CSS and JavaScript symbols floating nearby">
+  <rect width="400" height="300" fill="#223642" />
+  <rect x="50" y="90" width="260" height="150" rx="8" fill="#0d1a20" />
+  <rect x="50" y="90" width="260" height="26" rx="8" fill="#3f5c6c" />
+  <circle cx="66" cy="103" r="5" fill="#d9704f" />
+  <circle cx="84" cy="103" r="5" fill="#e8a33d" />
+  <circle cx="102" cy="103" r="5" fill="#5ad66d" />
+  <text x="66" y="150" font-family="monospace" font-size="15" fill="#5ad66d">#!/usr/bin/perl</text>
+  <text x="66" y="175" font-family="monospace" font-size="15" fill="#6fb3d9">print "hi cgi-bin";</text>
+  <text x="66" y="200" font-family="monospace" font-size="15" fill="#e8a33d">_</text>
+  <!-- camel silhouette on top of terminal -->
+  <g transform="translate(215,40)" fill="#d9a76b">
+    <path d="M0 45 C0 30 8 20 14 20 C14 8 24 0 32 6 C38 10 38 18 34 22 C42 20 50 26 50 34 L50 45 C50 48 47 50 44 50 L4 50 C1 50 0 48 0 45 Z" />
+    <rect x="6" y="48" width="6" height="14" />
+    <rect x="20" y="48" width="6" height="14" />
+    <rect x="34" y="48" width="6" height="14" />
+  </g>
+  <!-- floating CSS/JS bits -->
+  <text x="330" y="130" font-family="monospace" font-size="22" fill="#c76b9c">{ }</text>
+  <text x="325" y="200" font-family="monospace" font-size="18" fill="#6fb3d9">if()</text>
+</svg>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A wrench crossed over a WordPress style gear, next to an open toolbox, hinting at more IT and plugin work than accounting">
+  <rect width="400" height="300" fill="#28404d" />
+  <!-- gear -->
+  <g transform="translate(200,130)" fill="#6fb3d9">
+    <circle r="55" />
+    <g>
+      <rect x="-8" y="-70" width="16" height="24" /><rect x="-8" y="46" width="16" height="24" />
+      <rect x="-70" y="-8" width="24" height="16" /><rect x="46" y="-8" width="24" height="16" />
+      <rect x="-58" y="-58" width="16" height="20" transform="rotate(45 -50 -48)" />
+      <rect x="42" y="-58" width="16" height="20" transform="rotate(-45 50 -48)" />
+      <rect x="-58" y="38" width="16" height="20" transform="rotate(-45 -50 48)" />
+      <rect x="42" y="38" width="16" height="20" transform="rotate(45 50 48)" />
+    </g>
+    <circle r="26" fill="#28404d" />
+    <text x="0" y="9" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="24" fill="#6fb3d9">W</text>
+  </g>
+  <!-- wrench -->
+  <g transform="translate(150,90) rotate(35)">
+    <rect x="-8" y="0" width="16" height="130" rx="6" fill="#e8a33d" />
+    <path d="M-18 -20 a18 18 0 1 0 36 0 a18 18 0 0 0 -8 -15 l-4 14 -10 -3 4 -14 a18 18 0 0 0 -18 18 z" fill="#e8a33d" />
+  </g>
+  <!-- toolbox -->
+  <g transform="translate(280,205)">
+    <rect x="0" y="10" width="90" height="45" rx="4" fill="#d9704f" />
+    <rect x="30" y="-6" width="30" height="18" rx="3" fill="none" stroke="#d9704f" stroke-width="5" />
+    <rect x="0" y="28" width="90" height="6" fill="#c76b9c" />
+    <circle cx="18" cy="32" r="3" fill="#16232c" /><circle cx="72" cy="32" r="3" fill="#16232c" />
+  </g>
+</svg>

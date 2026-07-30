@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A soft cloud with a gear inside, a small blackbird perched on top, and a sunrise behind — a nod to a first full time Salesforce role">
+  <rect width="400" height="300" fill="#2c4454" />
+  <circle cx="320" cy="70" r="45" fill="#e8a33d" opacity="0.85" />
+  <g transform="translate(90,130)">
+    <ellipse cx="60" cy="60" rx="70" ry="42" fill="#e8f0ee" />
+    <circle cx="30" cy="45" r="34" fill="#e8f0ee" />
+    <circle cx="95" cy="40" r="30" fill="#e8f0ee" />
+    <g transform="translate(60,60)" fill="#6fb3d9">
+      <circle r="20" />
+      <rect x="-4" y="-28" width="8" height="12" /><rect x="-4" y="16" width="8" height="12" />
+      <rect x="-28" y="-4" width="12" height="8" /><rect x="16" y="-4" width="12" height="8" />
+      <circle r="9" fill="#e8f0ee" />
+    </g>
+  </g>
+  <!-- blackbird -->
+  <g transform="translate(150,90)">
+    <ellipse cx="0" cy="0" rx="18" ry="12" fill="#16232c" />
+    <circle cx="14" cy="-6" r="8" fill="#16232c" />
+    <path d="M22 -6 l8 2 -8 3 z" fill="#e8a33d" />
+    <path d="M-16 0 q-14 -4 -18 4 q10 4 18 2 z" fill="#16232c" />
+  </g>
+</svg>

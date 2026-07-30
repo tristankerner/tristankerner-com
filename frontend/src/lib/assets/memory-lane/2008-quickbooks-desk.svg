@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A ledger book, a calculator, and a headset stacked on a desk, with a big Q logo watching over them">
+  <rect width="400" height="300" fill="#223642" />
+  <path d="M0 260 L400 260 L400 300 L0 300 Z" fill="#1c2e38" />
+  <!-- ledger book -->
+  <g transform="translate(60,150)">
+    <rect x="0" y="0" width="110" height="80" rx="4" fill="#e8f0ee" />
+    <line x1="0" y1="0" x2="0" y2="80" stroke="#c9d6d3" stroke-width="3" />
+    <line x1="14" y1="18" x2="100" y2="18" stroke="#8aa2ab" stroke-width="2" />
+    <line x1="14" y1="34" x2="100" y2="34" stroke="#8aa2ab" stroke-width="2" />
+    <line x1="14" y1="50" x2="100" y2="50" stroke="#8aa2ab" stroke-width="2" />
+    <line x1="14" y1="66" x2="60" y2="66" stroke="#5ad66d" stroke-width="3" />
+  </g>
+  <!-- calculator -->
+  <g transform="translate(200,140)">
+    <rect x="0" y="0" width="70" height="95" rx="6" fill="#3f5c6c" />
+    <rect x="8" y="8" width="54" height="20" rx="2" fill="#5ad66d" />
+    <g fill="#567585">
+      <rect x="8" y="36" width="14" height="14" rx="2" /><rect x="28" y="36" width="14" height="14" rx="2" /><rect x="48" y="36" width="14" height="14" rx="2" />
+      <rect x="8" y="54" width="14" height="14" rx="2" /><rect x="28" y="54" width="14" height="14" rx="2" /><rect x="48" y="54" width="14" height="14" rx="2" />
+      <rect x="8" y="72" width="14" height="14" rx="2" /><rect x="28" y="72" width="14" height="14" rx="2" /><rect x="48" y="72" width="14" height="14" rx="2" />
+    </g>
+  </g>
+  <!-- headset -->
+  <g transform="translate(300,120)">
+    <path d="M0 40 a35 35 0 0 1 70 0" stroke="#d9704f" stroke-width="6" fill="none" />
+    <rect x="-6" y="34" width="14" height="24" rx="6" fill="#d9704f" />
+    <rect x="62" y="34" width="14" height="24" rx="6" fill="#d9704f" />
+    <path d="M76 55 q14 4 10 24" stroke="#d9704f" stroke-width="5" fill="none" stroke-linecap="round" />
+    <circle cx="88" cy="80" r="5" fill="#c76b9c" />
+  </g>
+  <!-- Q badge -->
+  <circle cx="330" cy="220" r="22" fill="#5ad66d" opacity="0.9" />
+  <text x="330" y="229" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="22" fill="#16232c">Q</text>
+</svg>
