@@ -13,7 +13,9 @@ describe("MemoryCarousel", () => {
   });
 
   it("renders a slide's image when it has one", () => {
-    const slides: MemorySlide[] = [{ text: "With a photo", image: { src: "/photo.jpg", alt: "A photo" } }];
+    const slides: MemorySlide[] = [
+      { text: "With a photo", image: { src: "/photo.jpg", alt: "A photo" } },
+    ];
     render(MemoryCarousel, { props: { slides, ariaLabel: "Test memory" } });
 
     expect(screen.getByRole("img", { name: "A photo" })).toHaveAttribute("src", "/photo.jpg");

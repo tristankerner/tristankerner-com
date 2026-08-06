@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import AboutMePage from "./+page.svelte";
-import { profile, skillGroups, certifications, jobs, personalProjects, promotedThroughText } from "./content";
+import {
+  profile,
+  skillGroups,
+  certifications,
+  jobs,
+  personalProjects,
+  promotedThroughText,
+} from "./content";
 
 // These tests assert against the content module's data rather than hardcoded
 // resume text, so editing skillGroups/certifications/jobs/personalProjects
@@ -17,7 +24,13 @@ describe("about-me page", () => {
 
   it("renders a heading for each top-level section", () => {
     render(AboutMePage);
-    for (const heading of ["Summary", "Technical Skills", "Certifications", "Experience", "Personal Projects"]) {
+    for (const heading of [
+      "Summary",
+      "Technical Skills",
+      "Certifications",
+      "Experience",
+      "Personal Projects",
+    ]) {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
     }
   });
@@ -45,7 +58,9 @@ describe("about-me page", () => {
     for (const job of jobs) {
       expect(screen.getByRole("heading", { name: job.company })).toBeInTheDocument();
       expect(screen.getAllByText(job.roles[0].title, { exact: false }).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(job.roles[0].duration, { exact: false }).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(job.roles[0].duration, { exact: false }).length).toBeGreaterThan(
+        0,
+      );
       expect(screen.getAllByText(job.roleLocation, { exact: false }).length).toBeGreaterThan(0);
       expect(screen.getAllByText(job.companyLocation, { exact: false }).length).toBeGreaterThan(0);
 

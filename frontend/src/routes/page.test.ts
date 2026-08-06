@@ -5,8 +5,20 @@ import { profile } from "./about-me/content";
 
 const data = {
   recentPosts: [
-    { date: "2026-07-15", slug: "live-visitor-counter", metadata: { title: "Live Visitor Counter", author: "Tristan Kerner", excerpt: "How the counter works." } },
-    { date: "2026-07-10", slug: "hello-blog", metadata: { title: "Hello, Blog", author: "Tristan Kerner", excerpt: "Kicking things off." } },
+    {
+      date: "2026-07-15",
+      slug: "live-visitor-counter",
+      metadata: {
+        title: "Live Visitor Counter",
+        author: "Tristan Kerner",
+        excerpt: "How the counter works.",
+      },
+    },
+    {
+      date: "2026-07-10",
+      slug: "hello-blog",
+      metadata: { title: "Hello, Blog", author: "Tristan Kerner", excerpt: "Kicking things off." },
+    },
   ],
   hasMorePosts: false,
 };

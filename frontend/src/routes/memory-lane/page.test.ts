@@ -32,7 +32,9 @@ describe("memory-lane page", () => {
     render(MemoryLanePage);
     // The carousel only mounts its current (first) slide until navigated, so
     // only images on a memory's first slide are visible without interaction.
-    const firstSlidesWithImages = memories.map((memory) => memory.slides[0]).filter((slide) => slide.image);
+    const firstSlidesWithImages = memories
+      .map((memory) => memory.slides[0])
+      .filter((slide) => slide.image);
     expect(firstSlidesWithImages.length).toBeGreaterThan(0);
     for (const slide of firstSlidesWithImages) {
       expect(screen.getByRole("img", { name: slide.image!.alt })).toBeInTheDocument();

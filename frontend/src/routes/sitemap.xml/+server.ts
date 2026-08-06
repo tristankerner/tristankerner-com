@@ -6,7 +6,10 @@ export const prerender = true;
 export const GET = () => {
   const staticPaths = ["/", "/about-me", "/memory-lane", "/blog"];
   // Page 1 lives at /blog itself, so the paginated route starts at page 2.
-  const pagePaths = Array.from({ length: Math.max(0, totalPages() - 1) }, (_, i) => `/blog/page/${i + 2}`);
+  const pagePaths = Array.from(
+    { length: Math.max(0, totalPages() - 1) },
+    (_, i) => `/blog/page/${i + 2}`,
+  );
 
   const urls = [
     ...[...staticPaths, ...pagePaths].map((path) => `  <url><loc>${SITE_URL}${path}</loc></url>`),
