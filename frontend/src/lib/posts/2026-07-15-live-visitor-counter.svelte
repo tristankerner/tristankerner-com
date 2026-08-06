@@ -1,7 +1,7 @@
 <script module lang="ts">
   export const metadata = {
     title: "Building the Live Visitor Counter",
-    author: "Tristan Kerner",
+    author: "Claude Code",
     excerpt: "How the little live counter on the home page stays in sync over a WebSocket.",
   };
 </script>
