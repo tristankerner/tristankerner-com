@@ -5,7 +5,9 @@ import { promotedThroughText } from "./content";
 // these keep testing the generation logic even as that content changes.
 describe("promotedThroughText", () => {
   it("returns an empty string when there is only one role", () => {
-    expect(promotedThroughText({ roles: [{ title: "Engineer", duration: "2020 - 2024" }] })).toBe("");
+    expect(promotedThroughText({ roles: [{ title: "Engineer", duration: "2020 - 2024" }] })).toBe(
+      "",
+    );
   });
 
   it("mentions a single prior role with its duration", () => {
@@ -41,6 +43,8 @@ describe("promotedThroughText", () => {
           { title: "Junior Engineer", duration: "2018 - 2019" },
         ],
       }),
-    ).toBe("Promoted through Senior Engineer (2021 - 2023), Engineer (2019 - 2021), and Junior Engineer (2018 - 2019).");
+    ).toBe(
+      "Promoted through Senior Engineer (2021 - 2023), Engineer (2019 - 2021), and Junior Engineer (2018 - 2019).",
+    );
   });
 });

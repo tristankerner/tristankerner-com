@@ -1,6 +1,6 @@
 ---
 title: "Hello, Blog"
-author: "Tristan Kerner"
+author: "Claude Code"
 excerpt: "A quick note on why this site now has a blog, and how it's built."
 ---
 

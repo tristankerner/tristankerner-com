@@ -18,7 +18,10 @@ import {
 // existing - but deliberately avoid asserting the *total* post count or
 // exact ordering array, so adding a new post never breaks this suite (blog
 // post content itself is excluded from the coverage requirement in
-// vite.config.ts; new posts shouldn't need a matching test either).
+// vite.config.ts; new posts shouldn't need a matching test either). For the
+// same reason, assertions against these real posts check shape (non-empty
+// string, etc.) rather than literal title/author/excerpt text, so editing
+// post content never breaks this suite either.
 describe("posts registry", () => {
   it("discovers at least the known posts under src/lib/posts", () => {
     expect(posts.length).toBeGreaterThanOrEqual(2);
@@ -37,14 +40,14 @@ describe("posts registry", () => {
 
   it("exposes each post's metadata", () => {
     const post = posts.find((p) => p.slug === "hello-blog");
-    expect(post?.metadata.title).toBe("Hello, Blog");
-    expect(post?.metadata.author).toBe("Tristan Kerner");
+    expect(post?.metadata.title.length).toBeGreaterThan(0);
+    expect(post?.metadata.author.length).toBeGreaterThan(0);
     expect(post?.metadata.excerpt.length).toBeGreaterThan(0);
   });
 
   it("reads metadata from a .svelte post's module-level export too", () => {
     const post = posts.find((p) => p.slug === "live-visitor-counter");
-    expect(post?.metadata.title).toBe("Building the Live Visitor Counter");
+    expect(post?.metadata.title.length).toBeGreaterThan(0);
   });
 });
 
@@ -75,7 +78,7 @@ describe("paginate", () => {
 describe("findPost", () => {
   it("finds a post by date and slug", () => {
     const post = findPost("2026-07-10", "hello-blog");
-    expect(post?.metadata.title).toBe("Hello, Blog");
+    expect(post?.metadata.title.length).toBeGreaterThan(0);
   });
 
   it("returns undefined for an unknown permalink", () => {

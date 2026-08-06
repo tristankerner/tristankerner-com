@@ -12,7 +12,5 @@ export const counterState = $state({
   completedOnce: false,
   error: false,
   errorMessage: null as string | null,
-  pageCounts: [
-      { 'path': '/',  'total_unique_visitors': 0 }
-  ] as PageVisitorCount[],
+  pageCounts: [{ path: "/", total_unique_visitors: 0 }] as PageVisitorCount[],
 });

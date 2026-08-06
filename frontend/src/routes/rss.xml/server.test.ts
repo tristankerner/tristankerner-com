@@ -16,7 +16,7 @@ describe("GET /rss.xml", () => {
   it("includes the feed shell", async () => {
     const text = await GET().text();
     expect(text).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-    expect(text).toContain("<rss version=\"2.0\"");
+    expect(text).toContain('<rss version="2.0"');
     expect(text).toContain(`<atom:link href="${SITE_URL}/rss.xml" rel="self"`);
   });
 
