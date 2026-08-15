@@ -16,7 +16,7 @@
         <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{profile.name}</h1>
             <p class="text-primary-600 dark:text-primary-500 mt-1 text-lg font-medium">
-                <span>{profile.title}</span> <span class="text-gray-400 dark:text-gray-500">|</span>
+                <span>{profile.title}</span> <span class="text-gray-400 dark:text-gray-500" aria-hidden="true">|</span>
                 <span>{profile.tagline}</span>
             </p>
         </div>

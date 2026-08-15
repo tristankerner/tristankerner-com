@@ -92,8 +92,8 @@
 <Footer>
     <FooterCopyright href="https://www.linkedin.com/in/tristan-kerner-754343135" by="Tristan Kerner™" year={2026} />
     <FooterLinkGroup class="mt-3 flex flex-wrap items-center text-sm text-gray-500 sm:mt-0 dark:text-gray-400">
-        <FooterLink href="https://www.linkedin.com/in/tristan-kerner-754343135"><LinkedinSolid size="lg"/></FooterLink>
-        <FooterLink href="https://github.com/tristankerner"><GithubSolid size="lg"/></FooterLink>
+        <FooterLink href="https://www.linkedin.com/in/tristan-kerner-754343135" aria-label="LinkedIn"><LinkedinSolid size="lg"/></FooterLink>
+        <FooterLink href="https://github.com/tristankerner" aria-label="GitHub"><GithubSolid size="lg"/></FooterLink>
         <li class="me-4 last:me-0 md:me-6">
             <button type="button" class="hover:underline" onclick={() => consentBanner?.openPreferences()}>
                 Cookie settings
