@@ -6,8 +6,11 @@ import {
   skillGroups,
   certifications,
   jobs,
+  jobDurationText,
   personalProjects,
   promotedThroughText,
+  roleDurationText,
+  viaEmployerText,
 } from "./content";
 
 // These tests assert against the content module's data rather than hardcoded
@@ -45,12 +48,21 @@ describe("about-me page", () => {
     }
   });
 
-  it("renders every certification with its id", () => {
+  it("renders every certification, with an id only when the issuer numbers it", () => {
     render(AboutMePage);
     for (const cert of certifications) {
       expect(screen.getAllByText(cert.name).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(cert.id).length).toBeGreaterThan(0);
+      if (cert.id) {
+        expect(screen.getAllByText(cert.id).length).toBeGreaterThan(0);
+      }
     }
+    // getNodeText matches on direct text children only, so the "ID:" label
+    // matches independently of the id in its nested span. One label per
+    // numbered credential, and none for the rest - an unguarded render emits a
+    // dangling "ID:" with nothing after it.
+    expect(screen.queryAllByText("ID:", { exact: true })).toHaveLength(
+      certifications.filter((cert) => cert.id).length,
+    );
   });
 
   it("renders a timeline entry for every job, with its current role and location details", () => {
@@ -58,15 +70,20 @@ describe("about-me page", () => {
     for (const job of jobs) {
       expect(screen.getByRole("heading", { name: job.company })).toBeInTheDocument();
       expect(screen.getAllByText(job.roles[0].title, { exact: false }).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(job.roles[0].duration, { exact: false }).length).toBeGreaterThan(
-        0,
-      );
+      expect(
+        screen.getAllByText(roleDurationText(job.roles[0]), { exact: false }).length,
+      ).toBeGreaterThan(0);
+      expect(screen.getAllByText(jobDurationText(job), { exact: false }).length).toBeGreaterThan(0);
       expect(screen.getAllByText(job.roleLocation, { exact: false }).length).toBeGreaterThan(0);
       expect(screen.getAllByText(job.companyLocation, { exact: false }).length).toBeGreaterThan(0);
 
       const expectedPromotion = promotedThroughText(job);
       if (expectedPromotion) {
         expect(screen.getByText(expectedPromotion)).toBeInTheDocument();
+      }
+
+      if (job.viaEmployer) {
+        expect(screen.getByText(viaEmployerText(job))).toBeInTheDocument();
       }
 
       for (const highlight of job.highlights) {
@@ -93,7 +110,8 @@ describe("about-me page", () => {
     render(AboutMePage);
     const [job] = jobs;
     const highlightWithSpecifics = job.highlights.find((h) => h.specifics.length > 0);
-    if (!highlightWithSpecifics) throw new Error("expected a highlight with specifics in fixture data");
+    if (!highlightWithSpecifics)
+      throw new Error("expected a highlight with specifics in fixture data");
 
     for (const specific of highlightWithSpecifics.specifics) {
       expect(screen.queryByText(specific)).not.toBeInTheDocument();

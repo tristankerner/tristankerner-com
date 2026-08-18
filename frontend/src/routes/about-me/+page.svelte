@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Accordion, AccordionItem, Badge, Timeline, TimelineItem } from "flowbite-svelte";
     import profilePhoto from "$lib/assets/profile-photo.jpg";
-    import { profile, summary, skillGroups, certifications, jobs, promotedThroughText, personalProjects } from "./content";
+    import { profile, summary, skillGroups, certifications, jobs, jobDurationText, roleDurationText, promotedThroughText, viaEmployerText, personalProjects } from "./content";
 </script>
 
 <div class="mx-auto max-w-5xl">
@@ -45,7 +45,9 @@
 
             <h2 class="mb-3 text-xl font-bold text-gray-900 dark:text-white">Certifications</h2>
             <ul class="space-y-2">
-                {#each certifications as cert (cert.id)}
+                <!-- keyed on name, not id: not every issuer numbers its credentials, and
+                     two id-less entries would collide on an undefined key. -->
+                {#each certifications as cert (cert.name)}
                     <li>
                         <p class="font-medium text-gray-700 dark:text-gray-300">
                             {#if cert.url}
@@ -60,7 +62,9 @@
                                 {cert.name}
                             {/if}
                         </p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">ID: <span>{cert.id}</span></p>
+                        {#if cert.id}
+                            <p class="text-xs text-gray-500 dark:text-gray-400">ID: <span>{cert.id}</span></p>
+                        {/if}
                     </li>
                 {/each}
             </ul>
@@ -72,7 +76,7 @@
                 {#each jobs as job, i (job.company)}
                     <!-- title is typed as required by flowbite-svelte but only rendered when
                          truthy; we build our own <h3> below instead, so pass "" to satisfy the type. -->
-                    <TimelineItem title="" date={job.duration} isLast={i === jobs.length - 1}>
+                    <TimelineItem title="" date={jobDurationText(job)} isLast={i === jobs.length - 1}>
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                             {#if job.companyUrl}
                                 <a href={job.companyUrl} target="_blank" class="hover:underline">{job.company}</a>
@@ -86,11 +90,18 @@
                         <p class="mb-1 font-semibold text-gray-700 dark:text-gray-300">
                             <span>{job.roles[0].title}</span>
                             <span class="font-normal text-gray-500 dark:text-gray-400">
-                                &middot; <span>{job.roles[0].duration}</span> &middot; <span>{job.roleLocation}</span>
+                                &middot; <span>{roleDurationText(job.roles[0])}</span> &middot; <span>{job.roleLocation}</span>
                             </span>
                         </p>
-                        {#if job.roles.length > 1}
-                            <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">{promotedThroughText(job)}</p>
+                        {#if job.roles.length > 1 || job.viaEmployer}
+                            <div class="mb-3 text-sm text-gray-500 dark:text-gray-400">
+                                {#if job.roles.length > 1}
+                                    <p>{promotedThroughText(job)}</p>
+                                {/if}
+                                {#if job.viaEmployer}
+                                    <p>{viaEmployerText(job)}</p>
+                                {/if}
+                            </div>
                         {/if}
                         <Accordion flush multiple class="contents">
                             <!-- A native ::marker can't share its line with a highlight's accordion
