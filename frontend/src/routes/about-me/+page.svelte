@@ -1,7 +1,7 @@
 <script lang="ts">
-    import { Badge, Timeline, TimelineItem } from "flowbite-svelte";
+    import { Accordion, AccordionItem, Badge, Timeline, TimelineItem } from "flowbite-svelte";
     import profilePhoto from "$lib/assets/profile-photo.jpg";
-    import { profile, summary, skillGroups, certifications, jobs, promotedThroughText, personalProjects } from "./content";
+    import { profile, summary, skillGroups, certifications, jobs, jobDurationText, roleDurationText, promotedThroughText, viaEmployerText, personalProjects } from "./content";
 </script>
 
 <div class="mx-auto max-w-5xl">
@@ -45,7 +45,9 @@
 
             <h2 class="mb-3 text-xl font-bold text-gray-900 dark:text-white">Certifications</h2>
             <ul class="space-y-2">
-                {#each certifications as cert (cert.id)}
+                <!-- keyed on name, not id: not every issuer numbers its credentials, and
+                     two id-less entries would collide on an undefined key. -->
+                {#each certifications as cert (cert.name)}
                     <li>
                         <p class="font-medium text-gray-700 dark:text-gray-300">
                             {#if cert.url}
@@ -60,7 +62,9 @@
                                 {cert.name}
                             {/if}
                         </p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">ID: <span>{cert.id}</span></p>
+                        {#if cert.id}
+                            <p class="text-xs text-gray-500 dark:text-gray-400">ID: <span>{cert.id}</span></p>
+                        {/if}
                     </li>
                 {/each}
             </ul>
@@ -70,7 +74,9 @@
             <h2 class="mb-4 text-xl font-bold text-gray-900 dark:text-white">Experience</h2>
             <Timeline>
                 {#each jobs as job, i (job.company)}
-                    <TimelineItem date={job.duration} isLast={i === jobs.length - 1}>
+                    <!-- title is typed as required by flowbite-svelte but only rendered when
+                         truthy; we build our own <h3> below instead, so pass "" to satisfy the type. -->
+                    <TimelineItem title="" date={jobDurationText(job)} isLast={i === jobs.length - 1}>
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                             {#if job.companyUrl}
                                 <a href={job.companyUrl} target="_blank" class="hover:underline">{job.company}</a>
@@ -84,17 +90,56 @@
                         <p class="mb-1 font-semibold text-gray-700 dark:text-gray-300">
                             <span>{job.roles[0].title}</span>
                             <span class="font-normal text-gray-500 dark:text-gray-400">
-                                &middot; <span>{job.roles[0].duration}</span> &middot; <span>{job.roleLocation}</span>
+                                &middot; <span>{roleDurationText(job.roles[0])}</span> &middot; <span>{job.roleLocation}</span>
                             </span>
                         </p>
-                        {#if job.roles.length > 1}
-                            <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">{promotedThroughText(job)}</p>
+                        {#if job.roles.length > 1 || job.viaEmployer}
+                            <div class="mb-3 text-sm text-gray-500 dark:text-gray-400">
+                                {#if job.roles.length > 1}
+                                    <p>{promotedThroughText(job)}</p>
+                                {/if}
+                                {#if job.viaEmployer}
+                                    <p>{viaEmployerText(job)}</p>
+                                {/if}
+                            </div>
                         {/if}
-                        <ul class="list-inside list-disc space-y-1 text-gray-600 dark:text-gray-400">
-                            {#each job.highlights as highlight (highlight)}
-                                <li>{highlight}</li>
-                            {/each}
-                        </ul>
+                        <Accordion flush multiple class="contents">
+                            <!-- A native ::marker can't share its line with a highlight's accordion
+                                 trigger (an atomic box either fits next to it or drops to the next
+                                 line entirely), so bullets are drawn manually as flex siblings instead. -->
+                            <ul class="space-y-1 text-gray-600 dark:text-gray-400">
+                                {#each job.highlights as highlight (highlight.summary)}
+                                    <li class="flex items-start gap-2">
+                                        <span class="mt-2 size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true"
+                                        ></span>
+                                        <div class="min-w-0 flex-1">
+                                            {#if highlight.specifics.length > 0}
+                                                <AccordionItem
+                                                    headingTag="div"
+                                                    class="contents"
+                                                    classes={{
+                                                        button:
+                                                            'border-b-0 p-0 text-left font-normal text-gray-600 dark:text-gray-400',
+                                                        content: 'border-b-0 p-0 pt-1.5',
+                                                    }}
+                                                >
+                                                    {#snippet header()}
+                                                        <span>{highlight.summary}</span>
+                                                    {/snippet}
+                                                    <ul class="ml-5 list-outside list-[circle] space-y-1 text-sm text-gray-500 dark:text-gray-500">
+                                                        {#each highlight.specifics as specific (specific)}
+                                                            <li>{specific}</li>
+                                                        {/each}
+                                                    </ul>
+                                                </AccordionItem>
+                                            {:else}
+                                                {highlight.summary}
+                                            {/if}
+                                        </div>
+                                    </li>
+                                {/each}
+                            </ul>
+                        </Accordion>
                     </TimelineItem>
                 {/each}
             </Timeline>

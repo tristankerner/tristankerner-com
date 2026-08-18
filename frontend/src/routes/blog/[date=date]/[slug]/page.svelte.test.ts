@@ -8,7 +8,8 @@ async function renderPost(slug: string) {
   const post = posts.find((p) => p.slug === slug)!;
   const component = await loadPostComponent(componentPathFor(post));
   const data = { post, componentPath: componentPathFor(post), component };
-  return { post, ...render(PostPage, { props: { data } }) };
+  const params = { date: post.date, slug: post.slug };
+  return { post, ...render(PostPage, { props: { data, params, form: undefined } }) };
 }
 
 describe("blog post page", () => {

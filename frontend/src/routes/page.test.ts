@@ -25,7 +25,7 @@ const data = {
 
 describe("home page", () => {
   it("renders the profile name, title, and photo", () => {
-    render(HomePage, { props: { data } });
+    render(HomePage, { props: { data, params: {}, form: undefined } });
     expect(screen.getByRole("heading", { level: 1, name: profile.name })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: profile.name })).toBeInTheDocument();
     expect(screen.getByText(profile.title, { exact: false })).toBeInTheDocument();
@@ -33,13 +33,13 @@ describe("home page", () => {
   });
 
   it("links to the blog and about-me pages", () => {
-    render(HomePage, { props: { data } });
+    render(HomePage, { props: { data, params: {}, form: undefined } });
     expect(screen.getByRole("link", { name: "Read the Blog" })).toHaveAttribute("href", "/blog");
     expect(screen.getByRole("link", { name: "About Me" })).toHaveAttribute("href", "/about-me");
   });
 
   it("renders a card for each recent post", () => {
-    render(HomePage, { props: { data } });
+    render(HomePage, { props: { data, params: {}, form: undefined } });
     for (const post of data.recentPosts) {
       const link = screen.getByRole("link", { name: new RegExp(post.metadata.title) });
       expect(link).toHaveAttribute("href", `/blog/${post.date}/${post.slug}`);
@@ -48,7 +48,7 @@ describe("home page", () => {
   });
 
   it('shows a "View all posts" link only when there are more posts than shown', () => {
-    const { rerender } = render(HomePage, { props: { data } });
+    const { rerender } = render(HomePage, { props: { data, params: {}, form: undefined } });
     expect(screen.queryByRole("link", { name: /View all posts/ })).not.toBeInTheDocument();
 
     rerender({ data: { ...data, hasMorePosts: true } });
@@ -56,7 +56,9 @@ describe("home page", () => {
   });
 
   it("renders a fallback message when there are no posts yet", () => {
-    render(HomePage, { props: { data: { recentPosts: [], hasMorePosts: false } } });
+    render(HomePage, {
+      props: { data: { recentPosts: [], hasMorePosts: false }, params: {}, form: undefined },
+    });
     expect(screen.getByText(/No posts yet/)).toBeInTheDocument();
   });
 });

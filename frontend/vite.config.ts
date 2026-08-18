@@ -96,7 +96,6 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      all: true,
       include: ["src/**/*.{ts,svelte}", "scripts/**/*.ts"],
       exclude: [
         // Ambient type declarations and empty barrel files have no executable

@@ -144,6 +144,7 @@ pub(crate) async fn serve(
 
     let (target, status) = resolve_target(req.path(), Path::new(BUILD_DIR));
     let is_html = target.extension().is_some_and(|ext| ext == "html");
+    let is_json = target.extension().is_some_and(|ext| ext == "json");
 
     let accept_encoding = req
         .headers()
@@ -169,10 +170,14 @@ pub(crate) async fn serve(
     }
 
     // Hashed build chunks never change; HTML must revalidate (cheap via the ETag
-    // NamedFile already emits) so deploys are picked up immediately.
+    // NamedFile already emits) so deploys are picked up immediately. Non-hashed
+    // JSON is content, not an asset - /resume.json and SvelteKit's __data.json
+    // payloads are regenerated every build and are expected to be read right
+    // after a deploy, so they revalidate on the same terms as HTML rather than
+    // going stale for an hour.
     let cache_control = if req.path().starts_with("/_app/immutable/") {
         "public, max-age=31536000, immutable"
-    } else if is_html {
+    } else if is_html || is_json {
         "no-cache"
     } else {
         "public, max-age=3600"
@@ -556,6 +561,21 @@ mod tests {
             "public, max-age=3600"
         );
         assert!(res.headers().get(header::CONTENT_ENCODING).is_none());
+    }
+
+    // /resume.json is regenerated every build and is meant to be fetched right
+    // after a deploy, so it must revalidate instead of sitting in a cache for an
+    // hour like a plain asset would.
+    #[actix_web::test]
+    async fn serve_makes_generated_json_revalidate() {
+        let req = TestRequest::get().uri("/resume.json").to_http_request();
+        let res = serve(req, test_tracker()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.headers().get(header::CACHE_CONTROL).unwrap(), "no-cache");
+        assert_eq!(
+            res.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
     }
 
     #[actix_web::test]

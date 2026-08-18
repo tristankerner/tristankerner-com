@@ -9,25 +9,33 @@ const posts: Post[] = [
 
 describe("blog index page", () => {
   it("renders the Blog heading and post list", () => {
-    render(BlogPage, { props: { data: { posts, currentPage: 1, totalPages: 1 } } });
+    render(BlogPage, {
+      props: { data: { posts, currentPage: 1, totalPages: 1 }, params: {}, form: undefined },
+    });
     expect(screen.getByRole("heading", { name: "Blog", level: 1 })).toBeInTheDocument();
     expect(screen.getByText("Post B")).toBeInTheDocument();
   });
 
   it("sets the document title", () => {
-    render(BlogPage, { props: { data: { posts, currentPage: 1, totalPages: 1 } } });
+    render(BlogPage, {
+      props: { data: { posts, currentPage: 1, totalPages: 1 }, params: {}, form: undefined },
+    });
     expect(document.title).toBe("Blog | Tristan Kerner");
   });
 
   it("adds a rel=next link when there is more than one page", () => {
-    render(BlogPage, { props: { data: { posts, currentPage: 1, totalPages: 2 } } });
+    render(BlogPage, {
+      props: { data: { posts, currentPage: 1, totalPages: 2 }, params: {}, form: undefined },
+    });
     expect(document.querySelector('link[rel="next"]')?.getAttribute("href")).toBe(
       "https://tristankerner.com/blog/page/2",
     );
   });
 
   it("omits rel=next when there's only one page", () => {
-    render(BlogPage, { props: { data: { posts, currentPage: 1, totalPages: 1 } } });
+    render(BlogPage, {
+      props: { data: { posts, currentPage: 1, totalPages: 1 }, params: {}, form: undefined },
+    });
     expect(document.querySelector('link[rel="next"]')).toBeFalsy();
   });
 });
