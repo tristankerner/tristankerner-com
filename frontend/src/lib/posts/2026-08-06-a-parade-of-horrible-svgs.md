@@ -10,7 +10,7 @@ I had a few goals for this website:
 2. Crash course everything AI for development.
 3. A place to put any eventual open-source portfolio that I may (or may not) put together.
 
-To achieve this, I set a somewhat strict requirement on myself for this page. **Make it architecturally 
+To achieve this, I set a somewhat strict requirement on myself for this page. **Make it architecturally
 interesting to me while only letting AI write most of the code.** This worked fine. There was a learning curve, and there
 might be bugs that I just haven't looked too deeply into. I even had it do the UI--it's not the fanciest, but it's
 probably better than what I (someone who is definitely not a graphic designer) could have quickly come up with.
@@ -19,13 +19,13 @@ Here's where things went wrong...or Mystery Science Theater 3000 levels of right
 
 I asked Claude:
 
-```@frontend/src/routes/memory-lane/content.ts in this file, and do your best to find or create an svg image to go along with the text in the slide. If possible, the image/icon should be amusing and almost conversational with the text written.```
+`@frontend/src/routes/memory-lane/content.ts in this file, and do your best to find or create an svg image to go along with the text in the slide. If possible, the image/icon should be amusing and almost conversational with the text written.`
 
 [Results on Memory Ln](/memory-lane)
 
-I could certainly have included more detail, or requested the images slide by slide. I could even have requested specific 
-imagery per slide. Maybe the SVG format restriction played a part. I could have even just asked to try again. To be 
-fair, some of the images aren't actually that horrible. In the end, though, it was my choice to keep them, and share my 
+I could certainly have included more detail, or requested the images slide by slide. I could even have requested specific
+imagery per slide. Maybe the SVG format restriction played a part. I could have even just asked to try again. To be
+fair, some of the images aren't actually that horrible. In the end, though, it was my choice to keep them, and share my
 short walk into the uncanny valley with some very small subset of the world. There's a lesson there, though I know that
 lesson may change as AI improves every day, and as we add loops and tools and agents upon agents. Instead of articulating
 that, I'll just leave you with the headliner:
@@ -51,4 +51,3 @@ that, I'll just leave you with the headliner:
     <rect x="360" y="150" width="6" height="6" fill="#d9704f" />
   </g>
 </svg>
-

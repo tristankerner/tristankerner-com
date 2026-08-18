@@ -6,20 +6,20 @@ excerpt: "Looking for a job in 2026 has been odd."
 
 Looking for a job in 2026 has been odd. I've always been conservative in my approach: I only send applications, or
 talk to recruiters when I know I am a good match (assuming the job description is accurate). Even so, there has been
-a staggering amount of ghosting. 
+a staggering amount of ghosting.
 
-Every application I've sent in the past three months has either gone completely unanswered, or has an automated 
-rejection email with no actionable reasoning. Several local companies have sent rejections stating that they want local 
-candidates only. Now, I know what you may be thinking. Or, at least, I know what I've previously thought, since writing 
-this is the equivalent of me mumbling out loud to myself in the corner of a crowded building. Surely, a local 
+Every application I've sent in the past three months has either gone completely unanswered, or has an automated
+rejection email with no actionable reasoning. Several local companies have sent rejections stating that they want local
+candidates only. Now, I know what you may be thinking. Or, at least, I know what I've previously thought, since writing
+this is the equivalent of me mumbling out loud to myself in the corner of a crowded building. Surely, a local
 candidate being rejected on the basis of locality must be some resume-parsing AI issue. Then, I realized that I actually
 enter my location when sending the application, in a dedicated field put there to collect it, so the recipient know
 exactly where I am located.
 
-Recruiters, hiring managers, et al. though...they really take the cake. A person will tell you live, over the phone 
-(or to your face, in the case of Zoom/Teams) that they will get back to you with a response in either direction. 
-It doesn't appear to matter how deep you go: Layers of recruiter, hiring manager, technical team, final decision 
-maker--they will all say the same thing. Then ghost you. Some of them will even volunteer, unprompted: 
+Recruiters, hiring managers, et al. though...they really take the cake. A person will tell you live, over the phone
+(or to your face, in the case of Zoom/Teams) that they will get back to you with a response in either direction.
+It doesn't appear to matter how deep you go: Layers of recruiter, hiring manager, technical team, final decision
+maker--they will all say the same thing. Then ghost you. Some of them will even volunteer, unprompted:
 "If you don't hear back by X day, reach out and we will give you an update". Try reaching out?
 
 <svg width="50px" height="50px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
