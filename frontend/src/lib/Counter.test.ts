@@ -14,9 +14,16 @@ function digitTitles(container: HTMLElement): (string | null)[] {
   return [...container.querySelectorAll("title")].map((t) => t.textContent);
 }
 
+// SvelteKit types page.url's pathname against the app's known route union,
+// which a plain `new URL(...)` can't satisfy - these tests exercise routes
+// generically rather than per-route, so the cast is the intended escape hatch.
+function setPageUrl(href: string) {
+  page.url = new URL(href) as typeof page.url;
+}
+
 describe("Counter", () => {
   it("renders one digit svg per character of the current page's count", () => {
-    page.url = new URL("http://localhost/");
+    setPageUrl("http://localhost/");
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 42 }];
 
     const { container } = render(Counter);
@@ -24,7 +31,7 @@ describe("Counter", () => {
   });
 
   it("uses the count for the current path when present", () => {
-    page.url = new URL("http://localhost/blog");
+    setPageUrl("http://localhost/blog");
     counterState.pageCounts = [
       { path: "/", total_unique_visitors: 1 },
       { path: "/blog", total_unique_visitors: 23 },
@@ -35,7 +42,7 @@ describe("Counter", () => {
   });
 
   it("falls back to the home page count when the current path has no entry", () => {
-    page.url = new URL("http://localhost/about-me");
+    setPageUrl("http://localhost/about-me");
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 7 }];
 
     const { container } = render(Counter);
@@ -43,7 +50,7 @@ describe("Counter", () => {
   });
 
   it("defaults to 0 when there is no home count either", () => {
-    page.url = new URL("http://localhost/about-me");
+    setPageUrl("http://localhost/about-me");
     counterState.pageCounts = [];
 
     const { container } = render(Counter);
@@ -51,7 +58,7 @@ describe("Counter", () => {
   });
 
   it("uses light colors when not in dark mode", () => {
-    page.url = new URL("http://localhost/");
+    setPageUrl("http://localhost/");
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 1 }];
     themeState.darkMode = false;
 
@@ -60,7 +67,7 @@ describe("Counter", () => {
   });
 
   it("uses dark colors in dark mode", () => {
-    page.url = new URL("http://localhost/");
+    setPageUrl("http://localhost/");
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 1 }];
     themeState.darkMode = true;
 
@@ -71,7 +78,7 @@ describe("Counter", () => {
   });
 
   it("applies the class prop to the wrapping div", () => {
-    page.url = new URL("http://localhost/");
+    setPageUrl("http://localhost/");
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 1 }];
 
     const { container } = render(Counter, { props: { class: "my-counter-class" } });
@@ -79,7 +86,7 @@ describe("Counter", () => {
   });
 
   it("re-keys and re-renders a digit when the count changes after mount", async () => {
-    page.url = new URL("http://localhost/");
+    setPageUrl("http://localhost/");
     counterState.pageCounts = [{ path: "/", total_unique_visitors: 1 }];
 
     const { container } = render(Counter);
