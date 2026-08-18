@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import AboutMePage from "./+page.svelte";
 import {
   profile,
@@ -70,8 +70,42 @@ describe("about-me page", () => {
       }
 
       for (const highlight of job.highlights) {
-        expect(screen.getAllByText(highlight).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(highlight.summary).length).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it("only renders a highlight as an expandable accordion when it has specifics", () => {
+    render(AboutMePage);
+    for (const job of jobs) {
+      for (const highlight of job.highlights) {
+        const [summaryEl] = screen.getAllByText(highlight.summary);
+        if (highlight.specifics.length > 0) {
+          expect(summaryEl.closest("button")).toBeInTheDocument();
+        } else {
+          expect(summaryEl.closest("button")).not.toBeInTheDocument();
+        }
+      }
+    }
+  });
+
+  it("expands a highlight's specifics on click and hides them beforehand", async () => {
+    render(AboutMePage);
+    const [job] = jobs;
+    const highlightWithSpecifics = job.highlights.find((h) => h.specifics.length > 0);
+    if (!highlightWithSpecifics) throw new Error("expected a highlight with specifics in fixture data");
+
+    for (const specific of highlightWithSpecifics.specifics) {
+      expect(screen.queryByText(specific)).not.toBeInTheDocument();
+    }
+
+    const [summaryEl] = screen.getAllByText(highlightWithSpecifics.summary);
+    const button = summaryEl.closest("button");
+    if (!button) throw new Error("expected highlight summary to be inside an accordion button");
+    await fireEvent.click(button);
+
+    for (const specific of highlightWithSpecifics.specifics) {
+      expect(screen.getAllByText(specific).length).toBeGreaterThan(0);
     }
   });
 

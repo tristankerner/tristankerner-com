@@ -267,8 +267,13 @@ export type Job = {
   description: string;
   roleLocation: RoleLocation;
   roles: Role[];
-  highlights: string[];
+  highlights: Highlight[];
 };
+
+export type Highlight = {
+  summary: string;
+  specifics: string[];
+}
 
 // roles are ordered most-recent first; everything after the first entry
 // is prior-role history used to generate the "Promoted through" line.
@@ -302,18 +307,20 @@ export const jobs: Job[] = [
       },
     ],
     highlights: [
-      "Redesigned enterprise integration architecture for business-critical SaaS workflows, reducing Workato billable usage by 98%, cutting integration failures by 89%, and avoiding roughly $850K in projected annual overage costs.",
-      "Designed and deployed centralized monitoring, alerting, and observability tooling across 100+ integrations spanning 10+ SaaS and internal systems, reducing incident detection time by 90%.",
-      "Architected fault-tolerant, bidirectional integrations and scalable worker-queue processes for a web-based SaaS platform, supporting real-time events, scheduled bulk jobs, and idempotent retry logic.",
-      "Co-designed and implemented a Databricks Lakehouse platform consolidating data from 10+ business systems via Fivetran, Lakeflow Connect, and custom Python ETL pipelines.",
-      "Built PySpark and SQL-based validation, transformation, data quality monitoring, reverse ETL, and self-service analytics workflows to improve data reliability and accessibility.",
-      "Developed Salesforce customizations with Apex, Lightning Web Components, Flows, custom objects, validation rules, and platform integrations to support business-critical workflows and data synchronization.",
-      "Designed and maintained SaaS platform features for document management, communications, tax verification, and reporting, improving reliability and usability for customer-facing workflows.",
-      "Partnered with product and business stakeholders across multiple time zones to define MVP scope, ship faster, and prioritize follow-on iterations based on user and operational needs.",
-      "Investigated and resolved complex production issues across custom applications, integrations, and Salesforce environments using code analysis, monitoring data, and root-cause troubleshooting.",
-      "Served as interim/backup Salesforce Administrator while the primary administrator was on maternity leave, handling user administration, profiles and permission sets, reports and dashboards, Flow automation, and day-to-day configuration and support requests for users across multiple departments.",
-      "Contributed to security policy development, remediation efforts, penetration test follow-up, and recurring access reviews as part of the company's security team.",
-      "Launched and governed a company-wide documentation platform that improved knowledge sharing, standardized technical processes, and reduced operational dependency on tribal knowledge.",
+      { summary: "Redesigned enterprise integration architecture for business-critical SaaS workflows, reducing Workato billable usage by 98%, cutting integration failures by 89%, and avoiding roughly $850K in projected annual overage costs.", specifics: [
+          "Prior projections placed Workato task usage at 112,000,000 tasks per year. Post optimizations had actual annual usage at 1,500,000 per year."
+          ]},
+      { summary: "Designed and deployed centralized monitoring, alerting, and observability tooling across 100+ integrations spanning 10+ SaaS and internal systems, reducing incident detection time by 90%.", specifics: []},
+      { summary: "Architected fault-tolerant, bidirectional integrations and scalable worker-queue processes for a web-based SaaS platform, supporting real-time events, scheduled bulk jobs, and idempotent retry logic.", specifics: []},
+      { summary: "Co-designed and implemented a Databricks Lakehouse platform consolidating data from 10+ business systems via Fivetran, Lakeflow Connect, and custom Python ETL pipelines.", specifics: []},
+      { summary: "Built PySpark and SQL-based validation, transformation, data quality monitoring, reverse ETL, and self-service analytics workflows to improve data reliability and accessibility.", specifics: []},
+      { summary: "Developed Salesforce customizations with Apex, Lightning Web Components, Flows, custom objects, validation rules, and platform integrations to support business-critical workflows and data synchronization.", specifics: []},
+      { summary: "Designed and maintained SaaS platform features for document management, communications, tax verification, and reporting, improving reliability and usability for customer-facing workflows.", specifics: []},
+      { summary: "Partnered with product and business stakeholders across multiple time zones to define MVP scope, ship faster, and prioritize follow-on iterations based on user and operational needs.", specifics: []},
+      { summary: "Investigated and resolved complex production issues across custom applications, integrations, and Salesforce environments using code analysis, monitoring data, and root-cause troubleshooting.", specifics: []},
+      { summary: "Served as interim/backup Salesforce Administrator while the primary administrator was on maternity leave, handling user administration, profiles and permission sets, reports and dashboards, Flow automation, and day-to-day configuration and support requests for users across multiple departments.", specifics: []},
+      { summary: "Contributed to security policy development, remediation efforts, penetration test follow-up, and recurring access reviews as part of the company's security team.", specifics: []},
+      { summary: "Launched and governed a company-wide documentation platform that improved knowledge sharing, standardized technical processes, and reduced operational dependency on tribal knowledge.", specifics: []},
     ],
   },
   {
@@ -329,14 +336,14 @@ export const jobs: Job[] = [
       { title: "Web Developer", duration: "2013 - 2014" },
     ],
     highlights: [
-      "Led development and systems integration strategy across multiple brands and six physical locations, supporting day-to-day business operations as well as high-level data analytics needs.",
-      "Designed and developed a headless eCommerce platform serving 60,000+ customers across multiple brands, with Salesforce as the system of record for customer, pricing, rewards, and product data; enabled personalized pricing, rewards programs, and cross-brand commerce experiences.",
-      "Engineered a time-limited cart hold and inventory reservation system, similar to ticket reservation platforms, enabling online sales of one-of-a-kind artwork by temporarily locking held items to prevent duplicate purchases while in another customer's cart.",
-      "Built and evolved custom integrations across Salesforce, eCommerce, point-of-sale, shipping, marketing, payment processing, and compliance systems, improving reliability and reducing manual work across direct-to-consumer and wholesale operations.",
-      "Owned Salesforce administration and development company-wide, including user access and permissions, workflow automation, data quality, reporting, configuration, and ongoing support for business-critical operations.",
-      "Developed CI/CD automation and Salesforce migration tooling using Apex, Python, REST APIs, Salesforce CLI, and Ant Migration Tool for heavily customized multi-brand environments, reducing manual deployment effort and improving data consistency.",
-      "Partnered with executives and business stakeholders to design Salesforce applications for inventory tracking, financial reporting, commissions, consignment, and reservations, improving operational visibility across multiple brands.",
-      "Negotiated technology vendor contracts and services, managed SaaS licenses, and maintained department financial budgets and forecasts.",
+      { summary: "Led development and systems integration strategy across multiple brands and six physical locations, supporting day-to-day business operations as well as high-level data analytics needs.", specifics: []},
+      { summary: "Designed and developed a headless eCommerce platform serving 60,000+ customers across multiple brands, with Salesforce as the system of record for customer, pricing, rewards, and product data; enabled personalized pricing, rewards programs, and cross-brand commerce experiences.", specifics: []},
+      { summary: "Engineered a time-limited cart hold and inventory reservation system, similar to ticket reservation platforms, enabling online sales of one-of-a-kind artwork by temporarily locking held items to prevent duplicate purchases while in another customer's cart.", specifics: []},
+      { summary: "Built and evolved custom integrations across Salesforce, eCommerce, point-of-sale, shipping, marketing, payment processing, and compliance systems, improving reliability and reducing manual work across direct-to-consumer and wholesale operations.", specifics: []},
+      { summary: "Owned Salesforce administration and development company-wide, including user access and permissions, workflow automation, data quality, reporting, configuration, and ongoing support for business-critical operations.", specifics: []},
+      { summary: "Developed CI/CD automation and Salesforce migration tooling using Apex, Python, REST APIs, Salesforce CLI, and Ant Migration Tool for heavily customized multi-brand environments, reducing manual deployment effort and improving data consistency.", specifics: []},
+      { summary: "Partnered with executives and business stakeholders to design Salesforce applications for inventory tracking, financial reporting, commissions, consignment, and reservations, improving operational visibility across multiple brands.", specifics: []},
+      { summary: "Negotiated technology vendor contracts and services, managed SaaS licenses, and maintained department financial budgets and forecasts.", specifics: []},
     ],
   },
 ];
