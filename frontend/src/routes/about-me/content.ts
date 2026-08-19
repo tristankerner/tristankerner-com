@@ -113,6 +113,7 @@ export const skillGroups: SkillGroup[] = [
       { name: "SendGrid", url: "https://sendgrid.com/" },
       { name: "Workato", url: "https://www.workato.com/" },
       { name: "Fivetran", url: "https://www.fivetran.com/" },
+      { name: "Bookstack", url: "https://www.bookstackapp.com/" },
       { name: "Marketing Cloud", url: "https://www.salesforce.com/marketing/" },
       { name: "Sage Intacct", url: "https://www.sage.com/en-us/sage-business-cloud/intacct/" },
       { name: "Drupal", url: "https://www.drupal.org/" },
@@ -164,6 +165,7 @@ export const skillGroups: SkillGroup[] = [
       { name: "Postman", url: "https://www.postman.com/" },
       { name: "Bruno", url: "https://www.usebruno.com/" },
       { name: "Salesforce Data Loader", url: "https://developer.salesforce.com/tools/data-loader" },
+      { name: "Workato Developer SDK", url: "https://docs.workato.com/en/developing-connectors/sdk.html" },
     ],
   },
   {
@@ -257,6 +259,8 @@ export const skillGroups: SkillGroup[] = [
     skills: [
       { name: "Okta", url: "https://www.okta.com/" },
       { name: "Keycloak", url: "https://www.keycloak.org/" },
+      { name: "OAuth2", url: "https://oauth.net/2/" },
+      { name: "JWT", url: "https://www.jwt.io/" },
       { name: "SSO" },
       { name: "RBAC", url: "https://csrc.nist.gov/projects/role-based-access-control" },
       { name: "Access Reviews" },
@@ -340,6 +344,14 @@ export const certifications: Certification[] = [
   {
     name: "Workato Enterprise AI Essentials",
     url: "https://academy.workato.com/learn/courses/251/workato-enterprise-ai-essentials",
+  },
+  {
+    name: "Introduction to Workato Agent Studio",
+    url: "https://academy.workato.com/learn/courses/41/introduction-to-workato-agent-studio",
+  },
+  {
+    name: "Introduction to Enterprise MCP",
+    url: "https://academy.workato.com/learn/courses/207/introduction-to-enterprise-mcp",
   },
 ];
 
@@ -517,6 +529,13 @@ export const jobs: Job[] = [
           "Errors requiring review and intervention fell from ~4,800 to ~500 per year (excluding soft-fails, outages, and automated retries).",
           "Optimizations followed a per-process analysis and covered: converting scheduled automations to event-based, converting event-based automations to scheduled, bulk processing optimizations, custom REST endpoint processing, Python data processing, system trigger changes, and schedule requirement audits.",
         ],
+      },
+      {
+        "id": "ism-workato-connector",
+        "summary": "Built and maintained a custom Workato connector using the Workato Developer SDK for the company documentation platform, which had no out-of-the-box connector available.",
+        "specifics": [
+            'Additionally assisted in troubleshooting other custom connectors (such as Sage Intacct) made by a third party when issues ocurred.'
+        ]
       },
       {
         id: "ism-observability",
