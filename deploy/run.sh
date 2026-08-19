@@ -10,6 +10,14 @@
 # .github/workflows/deploy.yml can drive it entirely from GitHub Actions
 # variables/secrets without editing this script. Run by hand the same way:
 #   DOMAIN=... LETSENCRYPT_EMAIL=... CLOUDFLARE_API_TOKEN=... ./deploy/run.sh
+# which, with no REGISTRY_HOST set, runs whatever `tristankerner-com:latest`
+# already resolves to locally instead of pulling.
+#
+# To roll back, re-run with IMAGE_REF pinned to an older tag that's still in
+# the registry:
+#   IMAGE_REF=<location>-docker.pkg.dev/<project>/<repo>/tristankerner-com:<sha> \
+#   REGISTRY_HOST=<location>-docker.pkg.dev \
+#   DOMAIN=... LETSENCRYPT_EMAIL=... CLOUDFLARE_API_TOKEN=... ./deploy/run.sh
 #
 # Re-running this script is safe: it stops+recreates the app container (and
 # the certbot-renew sidecar) in place, but never deletes or modifies an
@@ -20,8 +28,18 @@ set -euo pipefail
 
 # --- Configuration -------------------------------------------------------
 : "${STATE_DIR:=/var/lib/tristankerner}"
-: "${IMAGE_NAME:=tristankerner-com}"
-: "${IMAGE_TAR:=/tmp/tristankerner-com-image.tar.gz}"
+# IMAGE_REF: the exact image to run, normally a SHA-tagged Artifact Registry
+# reference like
+# us-west1-docker.pkg.dev/<project>/<repo>/tristankerner-com:<git sha>.
+# IMAGE_REPO: the same reference without its tag, used only to clean up
+# previously deployed tags below; defaults to IMAGE_REF's own repository.
+# REGISTRY_HOST: registry to authenticate against before pulling. Leave it
+# empty to skip both the login and the pull and just run whatever IMAGE_REF
+# already resolves to locally - that's the path for running this script by
+# hand against a locally built image.
+: "${IMAGE_REF:=tristankerner-com:latest}"
+: "${IMAGE_REPO:=${IMAGE_REF%:*}}"
+: "${REGISTRY_HOST:=}"
 : "${CONTAINER_NAME:=tristankerner-com}"
 : "${HTTP_PORT:=80}"
 : "${HTTPS_PORT:=443}"
@@ -75,14 +93,45 @@ cat >"$CLOUDFLARE_INI" <<EOF
 dns_cloudflare_api_token = $CLOUDFLARE_API_TOKEN
 EOF
 
-# --- Load the freshly built app image -----------------------------------
-# No container registry involved: the image is built in CI and shipped here
-# as a plain tarball (see .github/workflows/deploy.yml).
-if [ ! -f "$IMAGE_TAR" ]; then
-  echo "error: image tarball not found at $IMAGE_TAR" >&2
+# --- Pull the freshly built app image ------------------------------------
+# The image is built and pushed to Artifact Registry by CI (see
+# .github/workflows/deploy.yml); this pulls it over Google's own network
+# rather than having CI push a tarball down the IAP tunnel.
+#
+# Authentication uses a short-lived access token from the instance metadata
+# server rather than any stored credential, so nothing secret is staged on
+# this VM for the pull. That token is scoped by the VM's own service
+# account, which needs roles/artifactregistry.reader on the repository plus
+# the devstorage.read_only scope. Doing it this way rather than relying on
+# docker-credential-gcr keeps this working regardless of how the COS image
+# happens to have Docker's credential helpers preconfigured.
+if [ -n "$REGISTRY_HOST" ]; then
+  # `|| true` so a curl failure falls through to the explicit check below
+  # rather than tripping `set -e` and exiting with no explanation. No jq on
+  # COS, hence the sed extraction from the single-line JSON response.
+  ACCESS_TOKEN=$(curl -sf -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
+    | sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p') || true
+  if [ -z "$ACCESS_TOKEN" ]; then
+    echo "error: could not obtain an Artifact Registry access token from the" >&2
+    echo "metadata server. Check that this VM has a service account attached" >&2
+    echo "with the devstorage.read_only scope." >&2
+    exit 1
+  fi
+  printf '%s' "$ACCESS_TOKEN" \
+    | docker login -u oauth2accesstoken --password-stdin "https://$REGISTRY_HOST"
+  unset ACCESS_TOKEN
+  # Drop the credential from root's docker config once the pull is done -
+  # the token is short-lived anyway, but there's no reason to leave it on
+  # disk between deploys.
+  trap 'docker logout "https://$REGISTRY_HOST" >/dev/null 2>&1 || true' EXIT
+  docker pull "$IMAGE_REF"
+fi
+
+if ! docker image inspect "$IMAGE_REF" >/dev/null 2>&1; then
+  echo "error: image $IMAGE_REF is not available locally" >&2
   exit 1
 fi
-docker load -i "$IMAGE_TAR"
 
 # --- Issue the initial certificate (skipped if one already exists) -----
 if [ ! -f "$CERT_DIR/live/$DOMAIN/fullchain.pem" ]; then
@@ -190,12 +239,20 @@ docker run -d \
   "${MISC_DOCKER_ARGS[@]}" \
   -p "$HTTP_PORT:$CONTAINER_PORT" \
   -p "$HTTPS_PORT:$CONTAINER_TLS_PORT" \
-  "$IMAGE_NAME:latest"
+  "$IMAGE_REF"
 
-# `docker load` just repointed the "$IMAGE_NAME:latest" tag at the new
-# image, leaving the previous version dangling (untagged); drop it so the
-# resource-limited VM's disk doesn't grow with every deploy. This only ever
-# touches dangling image layers, never $STATE_DIR.
+# Every deploy pulls a new SHA-tagged image, so unlike the old `docker load`
+# of a single :latest tag, the previously deployed image stays *tagged* on
+# this VM and would never be reclaimed by a dangling-only prune. Drop every
+# tag under this repository except the one just deployed, so the
+# resource-limited VM's disk doesn't grow by ~11MB on every deploy. Scoped
+# to $IMAGE_REPO, so the certbot image is never a candidate, and this only
+# ever touches images, never $STATE_DIR.
+docker images "$IMAGE_REPO" --format '{{.Repository}}:{{.Tag}}' \
+  | grep -vxF "$IMAGE_REF" \
+  | xargs -r docker rmi -f >/dev/null 2>&1 || true
+
+# Then the usual sweep for layers left untagged by the above.
 docker image prune -f >/dev/null
 
 echo "Up. Remember the GCP firewall must allow ingress on tcp:$HTTP_PORT and tcp:$HTTPS_PORT."
