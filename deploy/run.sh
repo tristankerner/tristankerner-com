@@ -106,6 +106,19 @@ EOF
 # docker-credential-gcr keeps this working regardless of how the COS image
 # happens to have Docker's credential helpers preconfigured.
 if [ -n "$REGISTRY_HOST" ]; then
+  # `docker login` writes the credential it just accepted to
+  # $DOCKER_CONFIG/config.json, defaulting to /root/.docker - which it can't
+  # even create here, because COS mounts / read-only (the same reason
+  # $STATE_DIR lives under /var). Left at the default this fails the deploy
+  # outright with "Error saving credentials: mkdir /root/.docker: read-only
+  # file system". Point it at a throwaway directory under /tmp instead,
+  # which is a writable tmpfs on COS - the same place remote-entrypoint.sh
+  # stages into. Removing that directory on exit is also what retires the
+  # token, so no `docker logout` is needed.
+  DOCKER_CONFIG=$(mktemp -d)
+  export DOCKER_CONFIG
+  trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+
   # `|| true` so a curl failure falls through to the explicit check below
   # rather than tripping `set -e` and exiting with no explanation. No jq on
   # COS, hence the sed extraction from the single-line JSON response.
@@ -121,10 +134,6 @@ if [ -n "$REGISTRY_HOST" ]; then
   printf '%s' "$ACCESS_TOKEN" \
     | docker login -u oauth2accesstoken --password-stdin "https://$REGISTRY_HOST"
   unset ACCESS_TOKEN
-  # Drop the credential from root's docker config once the pull is done -
-  # the token is short-lived anyway, but there's no reason to leave it on
-  # disk between deploys.
-  trap 'docker logout "https://$REGISTRY_HOST" >/dev/null 2>&1 || true' EXIT
   docker pull "$IMAGE_REF"
 fi
 
