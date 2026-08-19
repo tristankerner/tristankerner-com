@@ -1,13 +1,26 @@
 # Builds the frontend and server directly on the runner (with dependency
 # caching), runs both test suites with a 90%+ coverage gate, then packages
 # the already-built artifacts into the runtime image (see Dockerfile - it no
-# longer compiles anything itself) and ships it straight to the production
-# VM - no container registry involved. The image is `docker save`'d to a
-# tarball, copied to the VM over an IAP-tunneled SSH connection (so the VM
-# never needs port 22 open to the public internet), and loaded with
-# `docker load`. deploy/run.sh then stops/replaces the previously running
-# app container in place, leaving any certbot-issued certificate under
-# $STATE_DIR untouched.
+# longer compiles anything itself), pushes that image to Artifact Registry,
+# and has the production VM pull it.
+#
+# The image used to be `docker save`'d to a ~14MB tarball and pushed to the
+# VM through the IAP tunnel by `gcloud compute scp`. That transfer was the
+# entire deploy-time problem: identical payload, but it completed in ~10s on
+# a good day and stalled for 7 or 14 minutes on a bad one (the gcloud IAP
+# relay stalling and reconnecting), which is what made deploys swing between
+# 4 and 20 minutes. Artifact Registry takes the image off the tunnel
+# entirely - the VM pulls over Google's own network - so deploys are now
+# both fast and predictable. It also means only changed layers ship, so a
+# frontend-only change moves ~2MB rather than the whole 14MB.
+#
+# The tunnel is still used, just for what it's good at: the SSH command
+# itself and the few KB of control-plane files (deploy.env carries the
+# Cloudflare token, so it goes over scp rather than through `--command`,
+# where it would show up in the VM's process list). The VM still never
+# needs port 22 open to the public internet. deploy/run.sh then
+# stops/replaces the previously running app container in place, leaving any
+# certbot-issued certificate under $STATE_DIR untouched.
 #
 # --- One-time setup on the GCP side (not done by this workflow) ----------
 # 1. Enable OS Login on the project or instance (metadata `enable-oslogin =
@@ -23,12 +36,26 @@
 #        sudo - needed to run `docker` as root on Container-Optimized OS)
 #      - roles/compute.viewer              (resolve the instance's zone/IP
 #        by name)
+#      - roles/artifactregistry.writer     (push the image below; can be
+#        granted on just the repository rather than the whole project)
 #    Then create a JSON key for it and store it as the GCP_SA_KEY secret
 #    below.
 # 4. The GCP firewall must also allow ingress on whatever ports HTTP_PORT/
 #    HTTPS_PORT below resolve to (80/443 by default) from the public
 #    internet - that's the actual web traffic, separate from the IAP/SSH
 #    rule above.
+# 5. Enable artifactregistry.googleapis.com and create a Docker repository
+#    in the same region as the VM (cross-region pulls are slower and incur
+#    egress). Give it a cleanup policy - the free tier is 0.5GB and each
+#    build adds roughly 11MB of new layers, so an unbounded repository
+#    would eventually start costing money. See the README's "Registry setup
+#    and retention" section for the exact commands, and
+#    deploy/cleanup-policy.json for the policy itself.
+# 6. Grant the *VM's* service account roles/artifactregistry.reader on that
+#    repository so it can pull. The VM also needs the
+#    devstorage.read_only scope, which is part of the default COS instance
+#    scope set - `gcloud compute instances describe <vm> --format=
+#    "value(serviceAccounts)"` to confirm.
 name: Build, test, and deploy
 
 on:
@@ -120,26 +147,10 @@ jobs:
             --fail-under-regions 90 \
             --fail-under-functions 90
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # The Dockerfile just copies the frontend/target artifacts built above
-      # into a distroless runtime image - no compilation happens in Docker,
-      # so there's no expensive layer to cache here anymore.
-      - name: Build app image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          tags: ${{ vars.IMAGE_NAME || 'tristankerner-com' }}:latest
-          load: true
-
-      - name: Save image to a tarball (no registry involved)
-        env:
-          IMAGE_NAME: ${{ vars.IMAGE_NAME || 'tristankerner-com' }}
-        run: docker save "$IMAGE_NAME:latest" | gzip > image.tar.gz
-
       # GCP_SA_KEY: JSON key for the service account described above
-      # (iap.tunnelResourceAccessor + compute.osAdminLogin + compute.viewer).
+      # (iap.tunnelResourceAccessor + compute.osAdminLogin + compute.viewer
+      # + artifactregistry.writer). Authentication has to happen before the
+      # image build now, since that step pushes.
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -147,6 +158,56 @@ jobs:
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
+
+      # AR_LOCATION should match the VM's region (GCP_ZONE minus its trailing
+      # zone letter) - a cross-region pull is both slower and billed as
+      # egress. Computed once here and reused by the build/push, deploy.env,
+      # and rollback steps below rather than repeating the expression.
+      - name: Resolve the image reference
+        env:
+          AR_LOCATION: ${{ vars.AR_LOCATION || 'us-west1' }}
+          AR_REPOSITORY: ${{ vars.AR_REPOSITORY || 'tristankerner-com' }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          IMAGE_NAME: ${{ vars.IMAGE_NAME || 'tristankerner-com' }}
+        run: |
+          REGISTRY_HOST="${AR_LOCATION}-docker.pkg.dev"
+          IMAGE_REPO="${REGISTRY_HOST}/${GCP_PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}"
+          {
+            echo "REGISTRY_HOST=$REGISTRY_HOST"
+            echo "IMAGE_REPO=$IMAGE_REPO"
+            # The VM deploys this commit-SHA tag rather than :latest, so it
+            # runs exactly what this run built even if another deploy
+            # repoints :latest in between. :latest is still pushed below as
+            # a convenience for humans inspecting the repository.
+            echo "IMAGE_REF=${IMAGE_REPO}:${GITHUB_SHA}"
+          } >> "$GITHUB_ENV"
+
+      # Registers gcloud as a docker credential helper for this registry, so
+      # the push below authenticates as the service account above.
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "$REGISTRY_HOST" --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # The Dockerfile just copies the frontend/target artifacts built above
+      # into a distroless runtime image - no compilation happens in Docker,
+      # so there's no expensive layer to cache here anymore.
+      #
+      # provenance/sbom are off deliberately: they'd turn each push into a
+      # multi-manifest index with extra attestation blobs, which both eats
+      # into the 0.5GB free tier and makes the "keep N most recent versions"
+      # cleanup policy harder to reason about. Nothing here consumes them.
+      - name: Build and push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          tags: |
+            ${{ env.IMAGE_REF }}
+            ${{ env.IMAGE_REPO }}:latest
+          push: true
+          provenance: false
+          sbom: false
 
       # Written as real env vars (not interpolated into the script text) so
       # secret values can't be reinterpreted as shell syntax. Never echoed.
@@ -161,7 +222,6 @@ jobs:
           # dns-cloudflare plugin for the DNS-01 challenge.
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           STATE_DIR: ${{ vars.STATE_DIR || '/var/lib/tristankerner' }}
-          IMAGE_NAME: ${{ vars.IMAGE_NAME || 'tristankerner-com' }}
           CONTAINER_NAME: ${{ vars.CONTAINER_NAME || 'tristankerner-com' }}
           HTTP_PORT: ${{ vars.HTTP_PORT || '80' }}
           HTTPS_PORT: ${{ vars.HTTPS_PORT || '443' }}
@@ -190,7 +250,11 @@ jobs:
             printf 'LETSENCRYPT_EMAIL=%s\n' "$LETSENCRYPT_EMAIL"
             printf 'CLOUDFLARE_API_TOKEN=%s\n' "$CLOUDFLARE_API_TOKEN"
             printf 'STATE_DIR=%s\n' "$STATE_DIR"
-            printf 'IMAGE_NAME=%s\n' "$IMAGE_NAME"
+            # REGISTRY_HOST/IMAGE_REF/IMAGE_REPO come from the "Resolve the
+            # image reference" step above via $GITHUB_ENV.
+            printf 'REGISTRY_HOST=%s\n' "$REGISTRY_HOST"
+            printf 'IMAGE_REPO=%s\n' "$IMAGE_REPO"
+            printf 'IMAGE_REF=%s\n' "$IMAGE_REF"
             printf 'CONTAINER_NAME=%s\n' "$CONTAINER_NAME"
             printf 'HTTP_PORT=%s\n' "$HTTP_PORT"
             printf 'HTTPS_PORT=%s\n' "$HTTPS_PORT"
@@ -217,10 +281,13 @@ jobs:
           umask 077
           printf '%s' "$GA4_CREDENTIALS_JSON" > ga4-credentials.json
 
-      - name: Install NumPy for gcloud IAP
-        run: |
-          PYTHON_LOC=$(gcloud info --format="value(basic.python_location)")
-          $PYTHON_LOC -m pip install numpy
+      # NOTE: there used to be an "Install NumPy for gcloud IAP" step here -
+      # the standard workaround for the IAP tunnel's slow pure-Python
+      # websocket relay. It's gone because the only thing that made tunnel
+      # throughput matter (the 14MB image tarball) no longer goes through
+      # it; what's left is a few KB. If small transfers ever start stalling
+      # too, that workaround is what to reach for again.
+      #
       # GCP_PROJECT_ID / GCP_ZONE / GCP_INSTANCE_NAME: identify the target
       # VM. GCP_ZONE/GCP_INSTANCE_NAME also used by the two steps below.
       - name: Stage deploy files on the VM
@@ -241,7 +308,7 @@ jobs:
             --zone "$GCP_ZONE" \
             --tunnel-through-iap \
             --quiet \
-            image.tar.gz deploy/run.sh deploy/remote-entrypoint.sh deploy.env ga4-credentials.json \
+            deploy/run.sh deploy/remote-entrypoint.sh deploy.env ga4-credentials.json \
             "$GCP_INSTANCE_NAME:/tmp/tristankerner-deploy/"
 
       - name: Run deploy on the VM
@@ -258,4 +325,4 @@ jobs:
 
       - name: Remove local deploy config from the runner
         if: always()
-        run: rm -f deploy.env ga4-credentials.json image.tar.gz
+        run: rm -f deploy.env ga4-credentials.json

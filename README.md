@@ -89,8 +89,7 @@ bun run new-post -- --title "My Post Title" --author "Tristan Kerner" --date 202
 
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs on every
 push to the `production` branch (or manually via `workflow_dispatch`) and
-does the whole build-test-ship cycle in one job, with no container registry
-involved:
+does the whole build-test-ship cycle in one job:
 
 1. **Build.** Frontend (`bun run build`, with the two `VITE_*` analytics IDs
    inlined from GitHub Actions variables) and backend (`cargo build
@@ -102,15 +101,19 @@ involved:
 3. **Image build.** The already-built `frontend/build` directory and the
    release binary are copied into a distroless runtime image (see
    [`Dockerfile`](Dockerfile)). Docker itself never compiles anything.
-4. **Ship, no registry.** The image is `docker save`'d to a tarball and
-   copied straight to the production GCP VM over an IAP-tunneled SSH
-   connection (`gcloud compute scp` / `ssh --tunnel-through-iap`), so the VM
-   never needs a public-facing port 22.
+4. **Push.** The image is pushed to Artifact Registry, tagged both with the
+   commit SHA and `latest`. Only the control-plane files (`deploy.env`, the
+   GA4 key, and the two deploy scripts — a few KB in total) travel to the VM
+   over the IAP-tunneled SSH connection (`gcloud compute scp` / `ssh
+   --tunnel-through-iap`), so the VM still never needs a public-facing
+   port 22.
 5. **Deploy on the VM.**
    [`deploy/remote-entrypoint.sh`](deploy/remote-entrypoint.sh) (run as
    root via `gcloud compute ssh ... --command`) loads the staged
    `deploy.env`, then hands off to [`deploy/run.sh`](deploy/run.sh), which:
-   `docker load`s the image, issues a Let's Encrypt certificate on first run
+   pulls the SHA-tagged image from Artifact Registry (authenticating with a
+   short-lived token from the instance metadata server, so no registry
+   credential is ever staged on the VM), issues a Let's Encrypt certificate on first run
    (DNS-01 via Cloudflare — skipped if one already exists under
    `$STATE_DIR`), keeps a `certbot-renew` sidecar container running for
    renewals, copies a staged GA4 service-account key into `$STATE_DIR` if
@@ -126,6 +129,54 @@ The comment block at the top of `.github/workflows/deploy.yml` documents the
 one-time GCP-side setup this all assumes is already in place (OS Login,
 firewall rule for the IAP range, service account + roles) — also summarized
 under [Environment variables](#environment-variables) below.
+
+### Why the image goes through a registry
+
+Step 4 used to `docker save` the image to a ~14MB tarball and push it to the
+VM through the IAP tunnel. That single transfer was responsible for nearly
+all deploy time and all of its variance: for an identical payload it
+completed in ~10s on a good run and stalled for 7 or 14 minutes on a bad one
+(the `gcloud` IAP relay stalling and reconnecting), which is why deploys
+swung between 4 and 20 minutes. Routing the image through Artifact Registry
+takes it off the tunnel — the VM pulls over Google's own network — so
+deploys are now consistently in the 4–5 minute range. It also means only
+changed layers move, so a frontend-only change ships ~2MB instead of 14MB,
+and every past build stays addressable for rollback.
+
+### Registry setup and retention
+
+The repository must live in the same region as the VM; a cross-region pull is
+slower and billed as egress. Create it once with:
+
+```bash
+gcloud services enable artifactregistry.googleapis.com --project "$PROJECT"
+```
+
+```bash
+gcloud artifacts repositories create tristankerner-com --repository-format=docker --location=us-west1 --project "$PROJECT" --description="Runtime images for tristankerner.com"
+```
+
+Artifact Registry's free tier is 0.5GB and nothing expires on its own, so the
+repository **needs a cleanup policy** or it will eventually start costing
+money — each build adds roughly 11MB of new layers (the distroless base is
+shared between versions; the ~9MB binary and ~2MB frontend are not). Keeping
+the 5 most recent versions and deleting anything older than 30 days holds it
+to well under 100MB while preserving a usable rollback window. With the
+policy in `deploy/cleanup-policy.json`:
+
+```bash
+gcloud artifacts repositories set-cleanup-policies tristankerner-com --location=us-west1 --project "$PROJECT" --policy=deploy/cleanup-policy.json --no-dry-run
+```
+
+Keep policies take precedence over delete policies, so the 5 most recent
+versions survive the 30-day rule even during a quiet stretch with no
+deploys. To preview what a policy would remove before committing to it, swap
+`--no-dry-run` for `--dry-run` and check
+`gcloud artifacts docker images list` afterwards.
+
+To roll back, re-run `deploy/run.sh` on the VM with `IMAGE_REF` pinned to an
+older SHA tag that's still in the registry — see the header comment in that
+script for the exact invocation.
 
 
 
@@ -212,7 +263,9 @@ just means the placeholder IDs are compiled in.
 |---|---|---|---|
 | `GOOGLE_ANALYTICS_ID` | optional | none (placeholder used) | Injected into the frontend build as `VITE_GOOGLE_ANALYTICS_ID`. |
 | `FACEBOOK_PIXEL_ID` | optional | none (placeholder used) | Injected into the frontend build as `VITE_FACEBOOK_PIXEL_ID`. |
-| `IMAGE_NAME` | optional | `tristankerner-com` | Docker image tag built in CI and loaded on the VM. |
+| `IMAGE_NAME` | optional | `tristankerner-com` | Final path segment of the image name in Artifact Registry. |
+| `AR_LOCATION` | optional | `us-west1` | Artifact Registry region the image is pushed to and pulled from. Should match `GCP_ZONE`'s region — a cross-region pull is slower and billed as egress. |
+| `AR_REPOSITORY` | optional | `tristankerner-com` | Artifact Registry repository name within `AR_LOCATION`. |
 | `DOMAIN` | **required** | — | Domain the TLS certificate is issued for, and the vhost the app answers on. |
 | `LETSENCRYPT_EMAIL` | **required** | — | Contact address registered with Let's Encrypt for expiry/urgent notices. |
 | `STATE_DIR` | optional | `/var/lib/tristankerner` | Persistent, writable directory on the VM holding certbot's state; survives redeploys. |
@@ -232,15 +285,18 @@ just means the placeholder IDs are compiled in.
 **External permissions:** none directly — these are plain config values.
 `GCP_PROJECT_ID`/`GCP_ZONE`/`GCP_INSTANCE_NAME` just need to correctly
 identify a VM that the service account behind `GCP_SA_KEY` (below) can
-reach. Separately, the GCP firewall must allow public ingress on whichever
-ports `HTTP_PORT`/`HTTPS_PORT` resolve to — that's the actual web traffic,
-distinct from the IAP/SSH firewall rule described below.
+reach. `AR_LOCATION`/`AR_REPOSITORY` must name a Docker repository that
+already exists (see [Registry setup and
+retention](#registry-setup-and-retention) above) — CI pushes to it but never
+creates it. Separately, the GCP firewall must allow public ingress on
+whichever ports `HTTP_PORT`/`HTTPS_PORT` resolve to — that's the actual web
+traffic, distinct from the IAP/SSH firewall rule described below.
 
 ### GitHub Actions — repository secrets (`secrets.*`)
 
 | Variable | Required for deploy | Description | External permissions needed |
 |---|---|---|---|
-| `GCP_SA_KEY` | **required** | JSON key for a dedicated GCP service account, used by `google-github-actions/auth` to authenticate `gcloud` for the SSH/SCP-over-IAP steps. | On the target project (or just the instance), grant the service account: `roles/iap.tunnelResourceAccessor` (open the IAP tunnel used for SSH/SCP), `roles/compute.osAdminLogin` (SSH in via OS Login *with* sudo — needed to run `docker` as root on Container-Optimized OS), `roles/compute.viewer` (resolve the instance's zone/IP by name). Also requires one-time setup: OS Login enabled on the project/instance (`enable-oslogin=TRUE` metadata) and a firewall rule allowing `tcp:22` from `35.235.240.0/20` only (the IAP forwarding range, not the public internet). |
+| `GCP_SA_KEY` | **required** | JSON key for a dedicated GCP service account, used by `google-github-actions/auth` to authenticate `gcloud` for the image push and the SSH/SCP-over-IAP steps. | On the target project (or just the instance), grant the service account: `roles/iap.tunnelResourceAccessor` (open the IAP tunnel used for SSH/SCP), `roles/compute.osAdminLogin` (SSH in via OS Login *with* sudo — needed to run `docker` as root on Container-Optimized OS), `roles/compute.viewer` (resolve the instance's zone/IP by name), and `roles/artifactregistry.writer` (push the image — can be scoped to just the repository). Also requires one-time setup: OS Login enabled on the project/instance (`enable-oslogin=TRUE` metadata), a firewall rule allowing `tcp:22` from `35.235.240.0/20` only (the IAP forwarding range, not the public internet), and the Artifact Registry repository from [Registry setup and retention](#registry-setup-and-retention). Note this is *not* the identity that pulls: the VM's own service account does that, and needs `roles/artifactregistry.reader` on the repository plus the `devstorage.read_only` scope. |
 | `CLOUDFLARE_API_TOKEN` | **required** | Used by certbot's `dns-cloudflare` plugin for the Let's Encrypt DNS-01 challenge. Written into `deploy.env` as a real env var (never interpolated into shell text, never echoed) and deleted from the VM on exit regardless of deploy outcome. | A Cloudflare **API Token** (not the legacy Global API Key) scoped to `Zone:DNS:Edit` for `DOMAIN`'s zone only — create via My Profile → API Tokens → Create Token → "Edit zone DNS" template, restricted to that one zone. |
 | `GA4_CREDENTIALS_JSON` | optional | Full JSON contents of a GCP service-account key, used by the visitor ticker to query GA4 (see [`src/ga4.rs`](src/ga4.rs)). Written to its own `ga4-credentials.json` file on the runner (never folded into `deploy.env`, since it's multi-line), staged to the VM alongside `deploy.env`, copied into persistent storage by [`deploy/run.sh`](deploy/run.sh), then deleted from both the runner and the VM's staging directory regardless of deploy outcome. Leaving it unset keeps GA4 querying disabled even with `APP_ENV=production`. | A dedicated GCP service account (separate from the one behind `GCP_SA_KEY` — this one only ever needs GA4 read access, never IAP/SSH) granted **Viewer** on the `GA4_PROPERTY_ID` property (GA4 Admin → Property Access Management), with a JSON key created for it. |
 
