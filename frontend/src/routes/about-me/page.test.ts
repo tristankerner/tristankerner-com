@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import AboutMePage from "./+page.svelte";
 import {
   profile,
@@ -10,13 +10,38 @@ import {
   personalProjects,
   promotedThroughText,
   roleDurationText,
+  summary,
   viaEmployerText,
 } from "./content";
+import { CACHE_TTL_MS, writeCache } from "./remote";
+import { feedPayload } from "./feed.fixture";
 
 // These tests assert against the content module's data rather than hardcoded
 // resume text, so editing skillGroups/certifications/jobs/personalProjects
 // in content.ts doesn't require touching this file.
 describe("about-me page", () => {
+  // Mounting the page kicks off a fetch of the live resume feed. Left alone
+  // that would make this suite depend on a third-party service being up (and
+  // quietly hit it on every run), so every test below runs against an
+  // unreachable feed - which is also the path that has to keep rendering the
+  // built-in content the assertions here are written against. The few tests
+  // that care about live data override this.
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("offline"))),
+    );
+    // fetchResume reports an unreachable feed on the console by design; that's
+    // signal in a browser and noise in a test run.
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it("renders the profile name, title, and photo", () => {
     render(AboutMePage);
     expect(screen.getByRole("heading", { level: 1, name: profile.name })).toBeInTheDocument();
@@ -199,5 +224,93 @@ describe("about-me page", () => {
     } finally {
       job.companyUrl = originalUrl;
     }
+  });
+
+  // The page renders the resume the microservice serves, falling back to the
+  // copy compiled into the build. Every test above exercises that fallback;
+  // these cover the live path and what the visitor sees on the way to it.
+  describe("live content from the resume feed", () => {
+    function stubFeed(response: Promise<Response>) {
+      const fetchImpl = vi.fn(() => response);
+      vi.stubGlobal("fetch", fetchImpl);
+      return fetchImpl;
+    }
+
+    function feedResponse(payload: unknown): Promise<Response> {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(payload),
+      } as unknown as Response);
+    }
+
+    it("replaces the built-in content once the feed arrives", async () => {
+      stubFeed(feedResponse(feedPayload()));
+      render(AboutMePage);
+
+      // The prerendered content is what's on screen until the fetch resolves.
+      expect(screen.getByRole("heading", { level: 1, name: profile.name })).toBeInTheDocument();
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", { level: 1, name: "Feed Profile Name" }),
+        ).toBeInTheDocument();
+      });
+      expect(screen.getByText("Feed summary paragraph.")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Feed Current Company" })).toBeInTheDocument();
+      expect(screen.getAllByText("Feed Named Project").length).toBeGreaterThan(0);
+      expect(screen.queryByText(profile.tagline)).not.toBeInTheDocument();
+    });
+
+    it("shows a spinner while the feed is in flight and removes it afterwards", async () => {
+      let resolveFeed: (response: Response) => void = () => {};
+      stubFeed(new Promise<Response>((resolve) => (resolveFeed = resolve)));
+      render(AboutMePage);
+
+      expect(await screen.findByText("Loading the latest resume content")).toBeInTheDocument();
+
+      resolveFeed({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(feedPayload()),
+      } as unknown as Response);
+
+      await waitFor(() => {
+        expect(screen.queryByText("Loading the latest resume content")).not.toBeInTheDocument();
+      });
+    });
+
+    it("uses a fresh cached copy without going to the network at all", async () => {
+      writeCache(feedPayload());
+      const fetchImpl = stubFeed(feedResponse(feedPayload()));
+      render(AboutMePage);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", { level: 1, name: "Feed Profile Name" }),
+        ).toBeInTheDocument();
+      });
+      expect(fetchImpl).not.toHaveBeenCalled();
+      // Nothing was fetched, so there was never anything to spin for.
+      expect(screen.queryByText("Loading the latest resume content")).not.toBeInTheDocument();
+    });
+
+    it("keeps the built-in content, and stops spinning, when the feed is unreachable", async () => {
+      render(AboutMePage);
+
+      await waitFor(() => {
+        expect(screen.queryByText("Loading the latest resume content")).not.toBeInTheDocument();
+      });
+      expect(screen.getByRole("heading", { level: 1, name: profile.name })).toBeInTheDocument();
+      expect(screen.getByText(summary)).toBeInTheDocument();
+    });
+
+    it("ignores a stale cached copy and fetches instead", async () => {
+      writeCache(feedPayload(), Date.now() - CACHE_TTL_MS);
+      const fetchImpl = stubFeed(feedResponse(feedPayload()));
+      render(AboutMePage);
+
+      await waitFor(() => expect(fetchImpl).toHaveBeenCalled());
+    });
   });
 });

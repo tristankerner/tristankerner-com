@@ -1,13 +1,60 @@
 <script lang="ts">
-    import { Accordion, AccordionItem, Badge, Timeline, TimelineItem } from "flowbite-svelte";
+    import { onMount } from "svelte";
+    import { Accordion, AccordionItem, Badge, Spinner, Timeline, TimelineItem } from "flowbite-svelte";
     import profilePhoto from "$lib/assets/profile-photo.jpg";
-    import { profile, summary, skillGroups, certifications, jobs, jobDurationText, roleDurationText, promotedThroughText, viaEmployerText, personalProjects } from "./content";
+    import { defaultContent, jobDurationText, roleDurationText, promotedThroughText, viaEmployerText } from "./content";
+    import { fetchResume, readCache } from "./remote";
+
+    // Starts as the copy compiled into the build - which is exactly what the
+    // prerendered HTML already contains, so the page is complete before any
+    // script runs and stays complete for a visitor without JavaScript. The live
+    // content from the resume microservice replaces it once it arrives.
+    let content = $state(defaultContent);
+    let loading = $state(false);
+
+    // Read through `content` so a swap re-renders every section at once. The
+    // markup below is unchanged by all of this: it still reads plain names.
+    const profile = $derived(content.profile);
+    const summary = $derived(content.summary);
+    const skillGroups = $derived(content.skillGroups);
+    const certifications = $derived(content.certifications);
+    const jobs = $derived(content.jobs);
+    const personalProjects = $derived(content.personalProjects);
+
+    onMount(async () => {
+        // A cache hit costs no request and no spinner: the swap is synchronous,
+        // so there is nothing to indicate the progress of.
+        const cached = readCache();
+        if (cached) {
+            content = cached;
+            return;
+        }
+
+        loading = true;
+        try {
+            const fetched = await fetchResume();
+            // null means the feed was unreachable or unreadable; `content` then
+            // keeps the built-in copy the visitor is already looking at.
+            if (fetched) content = fetched;
+        } finally {
+            loading = false;
+        }
+    });
 </script>
 
 <div class="mx-auto max-w-5xl">
     <section
-        class="mb-10 flex flex-col items-center gap-6 rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm sm:flex-row sm:text-left dark:border-gray-700 dark:bg-gray-800"
+        class="relative mb-10 flex flex-col items-center gap-6 rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm sm:flex-row sm:text-left dark:border-gray-700 dark:bg-gray-800"
     >
+        {#if loading}
+            <!-- Positioned out of flow so appearing and disappearing never moves
+                 anything: the page is already showing a complete resume, and this
+                 only says a newer one is being fetched. -->
+            <div class="absolute top-3 right-3" role="status">
+                <Spinner size="4" aria-hidden="true" />
+                <span class="sr-only">Loading the latest resume content</span>
+            </div>
+        {/if}
         <img
             src={profilePhoto}
             alt={profile.name}
