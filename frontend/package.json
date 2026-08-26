@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
     "new-post": "bun scripts/new-post.ts",
+    "sync-resume": "bun scripts/sync-resume.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

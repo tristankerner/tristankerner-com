@@ -98,6 +98,25 @@ jobs:
         working-directory: frontend
         run: bun install --frozen-lockfile
 
+      # Refreshes frontend/src/routes/about-me/resume-data.generated.ts from
+      # the resume microservice's feed, so the *prerendered* about-me page -
+      # what search engines index and what a visitor without JavaScript reads -
+      # matches the resume as published rather than as last committed. The
+      # browser fetches the feed too, but only after the HTML has already been
+      # served.
+      #
+      # Deliberately not committed back: this keeps the deployed artifact
+      # current without a bot writing to the branch on every run. The committed
+      # copy is the fallback, refreshed by hand with `bun run sync-resume`.
+      #
+      # Exits 0 when the feed is unreachable (build proceeds with the committed
+      # copy - someone else's outage should not block a deploy) and 1 when the
+      # feed answers but cannot be read, which is a real problem worth stopping
+      # for. See frontend/scripts/sync-resume.ts.
+      - name: Sync resume content from the feed
+        working-directory: frontend
+        run: bun run sync-resume
+
       # Both IDs are public client-side identifiers (they ship in the built
       # JS regardless), so they're plain repository variables rather than
       # secrets. Vite only inlines VITE_-prefixed vars that are present at

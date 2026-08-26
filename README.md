@@ -85,6 +85,75 @@ bun run new-post -- --title "My Post Title" --author "Tristan Kerner" --date 202
   prerendered `/blog/[date]/[slug]` route and its entry in the paginated
   blog index.
 
+## About-me content and the resume feed
+
+`/about-me` renders the resume served by the resume microservice, so
+publishing a revision there updates the live page without a redeploy:
+
+    https://resume.tristankerner.com/public/tristan/resume/resume.json
+
+How it resolves, in order — see
+[`frontend/src/routes/about-me/remote.ts`](frontend/src/routes/about-me/remote.ts):
+
+1. **Built-in content.** [`content.ts`](frontend/src/routes/about-me/content.ts)
+   exports `defaultContent`, assembled from the generated data described below.
+   It is what the prerendered `about-me.html` contains, so the page is complete
+   for search engines and for visitors without JavaScript, and it is what stays
+   on screen if everything below fails.
+2. **Local cache.** A previous response kept in `localStorage` under
+   `about-me:resume:v1` for 30 minutes (`CACHE_TTL_MS`). A hit costs no request
+   and shows no spinner. The *raw* response is cached rather than the mapped
+   result, so a cached entry is always re-validated by the code that is
+   actually running.
+3. **The feed.** Fetched on mount when the cache is cold or stale, behind a
+   Flowbite `Spinner` in the header card. `normalize` rewrites the transport's
+   conventions (snake_case keys, `null` for an absent value, the revision
+   envelope) and a set of small readers validate what comes out. Any failure —
+   offline, CORS, an error status, a field that changed type — leaves the page
+   on whatever it was already showing.
+
+### Keeping the built-in copy fresh
+
+The data lives in
+[`resume-data.generated.ts`](frontend/src/routes/about-me/resume-data.generated.ts),
+written by `bun run sync-resume` from the same feed and through the same
+readers:
+
+```sh
+cd frontend
+bun run sync-resume            # fetch, validate, rewrite, format
+bun run sync-resume -- --check # exit 1 if it's stale; write nothing
+```
+
+The deploy workflow runs it before `bun run build`, so the prerendered HTML —
+the version search engines index — matches the resume as published rather than
+as last committed. It is **not** committed back from CI: the checked-in copy is
+the fallback, refreshed by hand when you feel like it. An unreachable feed
+exits 0 and leaves the file alone (an outage elsewhere shouldn't block a
+deploy); a feed that answers but can't be read exits 1.
+
+`content.ts` keeps the types, the date-formatting helpers, and the assembly
+into `defaultContent`. The split exists so the generator can rewrite the resume
+without erasing the commentary in those types.
+
+Three things worth knowing before changing any of this:
+
+- **The feed must send CORS headers.** It is read cross-origin from
+  `tristankerner.com`, so it needs `Access-Control-Allow-Origin`. Without it
+  the browser blocks the read and the page silently falls back to the built-in
+  copy — correct behaviour, but indistinguishable from the service being down
+  except by the console warning. Note this bites through Cloudflare's cache
+  too: a response cached *before* the header was added keeps being served
+  without it until it expires.
+- **URLs from the feed are filtered to http/https**
+  (`safeUrl` in `remote.ts`). They land in `href` attributes, which Svelte does
+  not sanitize; a `javascript:` URL would otherwise run on this origin. A
+  rejected URL costs that one link its hyperlink, not the whole resume.
+- **`contact` and `education` degrade on their own.** Nothing renders them, so
+  a malformed one keeps just that section's built-in copy instead of discarding
+  the entire live resume. Every section the page *does* render is all-or-
+  nothing.
+
 ## Deployment
 
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs on every
