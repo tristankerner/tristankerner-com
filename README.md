@@ -154,6 +154,28 @@ Three things worth knowing before changing any of this:
   the entire live resume. Every section the page *does* render is all-or-
   nothing.
 
+### Downloading a résumé as .docx
+
+The "Download résumé (.docx)" button at the top of `/about-me` builds a master
+`.docx` from whichever `ResumeContent` the page currently has — live feed data
+if it arrived, the built-in copy otherwise — and saves it entirely client-side:
+no server round trip, no added dependency. It's a ZIP of hand-written OOXML
+(see [`frontend/src/routes/about-me/docx/`](frontend/src/routes/about-me/docx/)),
+built behind a dynamic import so none of it lands in the page's initial JS
+chunk. `RESUME_EMAIL` in
+[`resume-docx.ts`](frontend/src/routes/about-me/docx/resume-docx.ts) is the
+address printed in the generated file — a disposable alias kept separate from
+the feed itself, since the feed is public and unauthenticated.
+
+The document is a *master* résumé — every job and highlight the feed has,
+unabridged — meant to be tailored downstream, not a targeted one-pager. It
+deliberately differs from a hand-tuned version in a few ways: no phone number
+and a different (disposable) email address; two additional jobs the feed
+carries that an older version might not have trimmed to; a contract-origin
+line wherever a job has one, for consistency with employment verification; and
+full month names in dates, matching the rest of the site's prose rather than
+an abbreviated style.
+
 ## Deployment
 
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs on every

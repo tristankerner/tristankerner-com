@@ -4,6 +4,7 @@
     import profilePhoto from "$lib/assets/profile-photo.jpg";
     import { defaultContent, jobDurationText, roleDurationText, promotedThroughText, viaEmployerText } from "./content";
     import { fetchResume, readCache } from "./remote";
+    import DownloadResumeButton from "./docx/DownloadResumeButton.svelte";
 
     // Starts as the copy compiled into the build - which is exactly what the
     // prerendered HTML already contains, so the page is complete before any
@@ -67,6 +68,7 @@
                 <span>{profile.tagline}</span>
             </p>
         </div>
+        <DownloadResumeButton {content} />
     </section>
 
     <div class="grid gap-10 md:grid-cols-3">
