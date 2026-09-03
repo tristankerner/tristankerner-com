@@ -20,7 +20,7 @@ describe("buildDocumentXml", () => {
       for (const highlight of job.highlights) {
         expect(xml).toContain(highlight.summary);
         for (const specific of highlight.specifics) {
-          expect(xml).not.toContain(specific);
+          expect(xml).not.toContain(specific.detail);
         }
       }
     }

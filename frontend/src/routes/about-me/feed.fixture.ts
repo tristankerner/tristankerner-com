@@ -4,7 +4,8 @@
  *
  * Every value is deliberately unlike the content compiled into the build, so an
  * assertion that finds it has necessarily found live data rather than the
- * defaults the page starts with. The shape - snake_case fields, a revision
+ * defaults the page starts with. The shape - JSON Resume's `basics`/`work`/
+ * `education`/`certificates`/`skills`/`projects`, camelCase fields, a revision
  * envelope around `data`, `null` rather than an absent key for an unset
  * optional - mirrors the real feed; see remote.ts for why that matters.
  *
@@ -20,53 +21,39 @@ export function feedPayload(): Record<string, unknown> {
     public: true,
     created_at: "2026-08-26T21:50:42.899419",
     data: {
-      profile: {
+      basics: {
         name: "Feed Profile Name",
-        title: "Feed Profile Title",
+        label: "Feed Profile Title",
         tagline: "Feed Profile Tagline",
+        summary: "Feed summary paragraph.",
+        location: { label: "Feed Location", kind: "remote", note: "Feed location note." },
+        additionalLocations: [],
+        profiles: [{ network: "Website", url: "https://example.com/feed" }],
       },
-      contact: {
-        locations: [{ label: "Feed Location", kind: "remote", note: "Feed location note." }],
-        links: [{ label: "Website", url: "https://example.com/feed" }],
-      },
-      summary: "Feed summary paragraph.",
-      skill_groups: [
+      work: [
         {
-          name: "Feed Skill Group",
-          skills: [
-            { name: "Feed Linked Skill", url: "https://example.com/skill" },
-            { name: "Feed Plain Skill", url: null },
-          ],
-        },
-      ],
-      certifications: [
-        { name: "Feed Numbered Cert", id: "4242", url: "https://example.com/cert" },
-        { name: "Feed Unnumbered Cert", id: null, url: null },
-      ],
-      jobs: [
-        {
-          company: "Feed Current Company",
-          company_url: "https://example.com/company",
-          company_location: "Feed City, ST",
-          start: "2022-08",
-          end: null,
-          via_employer: {
+          name: "Feed Current Company",
+          url: "https://example.com/company",
+          location: "Feed City, ST",
+          description: "Feed company description.",
+          startDate: "2022-08",
+          endDate: null,
+          viaEmployer: {
             name: "Feed Staffing Agency",
-            start: "2022-08",
-            end: "2023-01",
+            startDate: "2022-08",
+            endDate: "2023-01",
             engagement: "contract-to-hire",
           },
-          description: "Feed company description.",
-          role_location: "Remote",
+          roleLocation: "Remote",
           roles: [
-            { title: "Feed Senior Role", start: "2024", end: null },
-            { title: "Feed Junior Role", start: "2022", end: "2024" },
+            { title: "Feed Senior Role", startDate: "2024", endDate: null },
+            { title: "Feed Junior Role", startDate: "2022", endDate: "2024" },
           ],
           highlights: [
             {
               id: "feed-highlight-detailed",
               summary: "Feed highlight with specifics.",
-              specifics: ["Feed specific one.", "Feed specific two."],
+              specifics: [{ detail: "Feed specific one." }, { detail: "Feed specific two." }],
             },
             {
               id: "feed-highlight-plain",
@@ -79,18 +66,31 @@ export function feedPayload(): Record<string, unknown> {
       education: [
         {
           institution: null,
-          credential: "Feed Credential",
-          field: null,
-          year: null,
+          studyType: "Feed Credential",
+          area: null,
+          endDate: null,
           location: null,
           url: null,
         },
       ],
-      personal_projects: [
-        { name: null, link: null, description: "Feed unnamed project." },
+      certificates: [
+        { name: "Feed Numbered Cert", identifier: "4242", url: "https://example.com/cert" },
+        { name: "Feed Unnumbered Cert", identifier: null, url: null },
+      ],
+      skills: [
+        {
+          name: "Feed Skill Group",
+          keywords: [
+            { name: "Feed Linked Skill", url: "https://example.com/skill" },
+            { name: "Feed Plain Skill", url: null },
+          ],
+        },
+      ],
+      projects: [
+        { name: null, url: null, description: "Feed unnamed project." },
         {
           name: "Feed Named Project",
-          link: "https://example.com/project",
+          url: "https://example.com/project",
           description: "Feed named project description.",
         },
       ],

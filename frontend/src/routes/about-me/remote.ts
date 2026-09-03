@@ -4,10 +4,14 @@
  *
  * Three things shape everything below.
  *
- * The feed is a *different service's* wire format. It is snake_case, wraps the
- * resume in a revision envelope, and sends `null` where these types use an
- * absent field. `normalize` deals with all three mechanically, so the readers
- * further down describe the resume rather than the transport.
+ * The feed is a *different service's* wire format: JSON Resume 1.0 - `basics`,
+ * `work`, `education`, `certificates`, `skills`, `projects` - wrapped in a
+ * revision envelope, camelCase throughout, sending `null` where these types use
+ * an absent field. `normalize` deals with the envelope and the null-vs-absent
+ * gap mechanically; the readers further down still have to reshape the feed's
+ * official section names into this page's own vocabulary (`profile`, `contact`,
+ * `jobs`, `personalProjects`, ...), which the feed and this page have never
+ * agreed on and don't need to.
  *
  * The feed is untrusted input. Not because the service is suspect, but because
  * "JSON fetched over the network" is the definition of untrusted: this page
@@ -34,7 +38,9 @@ import {
   type Profile,
   type ResumeContent,
   type Role,
+  type Skill,
   type SkillGroup,
+  type Specific,
   type ViaEmployer,
   defaultContent,
 } from "./content";
@@ -46,7 +52,7 @@ export const RESUME_FEED_URL = "https://resume.tristankerner.com/public/tristan/
  * running, so bumping this is how a change here stops trying to read entries
  * written by the old one.
  */
-export const CACHE_KEY = "about-me:resume:v1";
+export const CACHE_KEY = "about-me:resume:v2";
 
 /**
  * How long a locally cached copy is served without asking the network at all.
@@ -69,13 +75,11 @@ class InvalidFeed extends Error {}
 
 /**
  * Rewrites the feed's conventions into this repo's, once, before anything looks
- * at a field: `company_url` becomes `companyUrl`, and an explicit `null`
- * becomes an absent key.
- *
- * Doing it here rather than field by field is what keeps the readers below
- * short. The one place it needs care is a `null` end date, which means "still
- * current" rather than "missing" - `nullable` puts that back, and is used only
- * where a null is genuinely meaningful.
+ * at a field: an explicit `null` becomes an absent key. The feed is already
+ * camelCase (see the module docstring), so the snake_case rewrite here is a
+ * no-op on today's payloads; it stays because a field added under the schema's
+ * own convention is camelCase by definition and this keeps that safe either
+ * way.
  */
 function normalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalize);
@@ -137,15 +141,17 @@ function literal<T extends string>(allowed: readonly T[]): Reader<T> {
   };
 }
 
-/** As `literal`, but an unrecognised value is dropped rather than rejected. */
-function optionalLiteral<T extends string>(allowed: readonly T[]): Reader<T | undefined> {
-  return (value) => (allowed as readonly string[]).find((a) => a === value) as T | undefined;
-}
-
 /**
  * Reads an object by applying one reader per field. The field map doubles as
  * the documentation of what this module requires of the feed - which is the
  * point of doing it this way rather than as a hand-written function each.
+ *
+ * The map's keys are the *feed's* field names: `shape` reads `raw[key]` for
+ * each one. Where this page's own vocabulary diverges from the feed's (a job's
+ * `company` is the feed's `work[].name`; a role's `start` is `startDate`), the
+ * reader that calls `shape` reads into an intermediate value keyed by the
+ * feed's names and renames the result afterward, rather than teaching `shape`
+ * itself about two sets of names.
  */
 function shape<T>(fields: { [K in keyof T]-?: Reader<T[K]> }): Reader<T> {
   return (value, field) => {
@@ -185,61 +191,189 @@ const readLocation = shape<Location>({
   note: text,
 });
 
-const readContact = shape<Contact>({
-  locations: arrayOf(readLocation),
-  links: arrayOf(shape<ContactLink>({ label: text, url: text })),
+/** `basics.profiles[]` entry -> this page's `ContactLink`: `network` is the label. */
+const readProfileLink: Reader<ContactLink> = (value, field) => {
+  const raw = shape<{ network: string; url: string }>({ network: text, url: text })(value, field);
+  return { label: raw.network, url: raw.url };
+};
+
+/**
+ * `basics.location` and `basics.additionalLocations[]` -> this page's
+ * `Contact`. The feed keeps one preferred location separate from the rest;
+ * this page has always treated them as a single ordered list with the
+ * preferred one first, so the two are recombined here exactly as `remote.ts`
+ * split them apart on the way in, before this migration, when the shapes
+ * matched directly.
+ */
+const readContactFromBasics: Reader<Contact> = (value, field) => {
+  const raw = shape<{
+    location: Location | undefined;
+    additionalLocations: Location[];
+    profiles: ContactLink[];
+  }>({
+    location: optionalOf(readLocation),
+    additionalLocations: arrayOf(readLocation),
+    profiles: arrayOf(readProfileLink),
+  })(value, field);
+
+  return {
+    locations: raw.location ? [raw.location, ...raw.additionalLocations] : raw.additionalLocations,
+    links: raw.profiles,
+  };
+};
+
+/** `basics.name` / `.label` / `.tagline` -> this page's `Profile`. */
+const readProfile: Reader<Profile> = (value, field) => {
+  const raw = shape<{ name: string; label: string; tagline: string }>({
+    name: text,
+    label: text,
+    tagline: text,
+  })(value, field);
+  return { name: raw.name, title: raw.label, tagline: raw.tagline };
+};
+
+const readSkill = shape<Skill>({ name: text, url: safeUrl });
+
+/**
+ * `skills[]` entry -> this page's `SkillGroup`. The feed's `keywords[]`
+ * becomes this page's `skills[]` - the individual entries a group is made of.
+ *
+ * Per-keyword `level` and `lastUsed` are never present here: the public feed
+ * withholds them (see `Skill` in ./content.ts), so there is nothing to read.
+ */
+const readSkillGroup: Reader<SkillGroup> = (value, field) => {
+  const raw = shape<{ name: string; keywords: Skill[] }>({
+    name: text,
+    keywords: arrayOf(readSkill),
+  })(value, field);
+  return { name: raw.name, skills: raw.keywords };
+};
+
+const readRole: Reader<Role> = (value, field) => {
+  const raw = shape<{ title: string; startDate: string; endDate: string | null }>({
+    title: text,
+    startDate: text,
+    endDate: nullable,
+  })(value, field);
+  return { title: raw.title, start: raw.startDate, end: raw.endDate };
+};
+
+const readViaEmployer: Reader<ViaEmployer> = (value, field) => {
+  const raw = shape<{
+    name: string;
+    startDate: string;
+    endDate: string;
+    engagement: "contract-to-hire" | "contract";
+  }>({
+    name: text,
+    startDate: text,
+    endDate: text,
+    engagement: literal(["contract-to-hire", "contract"] as const),
+  })(value, field);
+  return { name: raw.name, start: raw.startDate, end: raw.endDate, engagement: raw.engagement };
+};
+
+/**
+ * `specifics[]` entry -> `detail` only. The private payload's per-specific
+ * `tech` list never reaches the public feed (see `Specific` in ./content.ts).
+ */
+const readSpecific = shape<Specific>({ detail: text });
+
+const readHighlight = shape<Highlight>({
+  id: text,
+  summary: text,
+  specifics: arrayOf(readSpecific),
 });
 
-const readSkillGroup = shape<SkillGroup>({
-  name: text,
-  skills: arrayOf(
-    shape({
-      name: text,
-      url: safeUrl,
-      level: optionalLiteral(["expert", "working", "familiar"] as const),
-      lastUsed: optionalText,
-    }),
-  ),
-});
+/** `work[]` entry -> this page's `Job`. */
+const readJob: Reader<Job> = (value, field) => {
+  const raw = shape<{
+    name: string;
+    url: string | undefined;
+    location: string;
+    description: string;
+    startDate: string;
+    endDate: string | null;
+    roleLocation: "On-site" | "Hybrid" | "Remote";
+    // The page reads roles[0] unconditionally for the current title; a job
+    // with none would render `undefined` rather than fail here, which is worse.
+    roles: Role[];
+    highlights: Highlight[];
+    viaEmployer: ViaEmployer | undefined;
+  }>({
+    name: text,
+    url: safeUrl,
+    location: text,
+    description: text,
+    startDate: text,
+    endDate: nullable,
+    roleLocation: literal(["On-site", "Hybrid", "Remote"] as const),
+    roles: arrayOf(readRole, 1),
+    highlights: arrayOf(readHighlight),
+    viaEmployer: optionalOf(readViaEmployer),
+  })(value, field);
 
-const readRole = shape<Role>({ title: text, start: text, end: nullable });
+  return {
+    company: raw.name,
+    companyUrl: raw.url,
+    companyLocation: raw.location,
+    start: raw.startDate,
+    end: raw.endDate,
+    viaEmployer: raw.viaEmployer,
+    description: raw.description,
+    roleLocation: raw.roleLocation,
+    roles: raw.roles,
+    highlights: raw.highlights,
+  };
+};
 
-const readJob = shape<Job>({
-  company: text,
-  companyUrl: safeUrl,
-  companyLocation: text,
-  start: text,
-  end: nullable,
-  viaEmployer: optionalOf(
-    shape<ViaEmployer>({
-      name: text,
-      start: text,
-      end: text,
-      engagement: literal(["contract-to-hire", "contract"] as const),
-    }),
-  ),
-  description: text,
-  roleLocation: literal(["On-site", "Hybrid", "Remote"] as const),
-  // The page reads roles[0] unconditionally for the current title; a job with
-  // none would render `undefined` rather than fail here, which is worse.
-  roles: arrayOf(readRole, 1),
-  highlights: arrayOf(shape<Highlight>({ id: text, summary: text, specifics: arrayOf(text) })),
-});
+/** `education[]` entry -> this page's `Education`. */
+const readEducation: Reader<Education> = (value, field) => {
+  const raw = shape<{
+    institution: string | undefined;
+    studyType: string;
+    area: string | undefined;
+    endDate: string | undefined;
+    location: string | undefined;
+    url: string | undefined;
+  }>({
+    institution: optionalText,
+    studyType: text,
+    area: optionalText,
+    endDate: optionalText,
+    location: optionalText,
+    url: safeUrl,
+  })(value, field);
 
-const readEducation = shape<Education>({
-  institution: optionalText,
-  credential: text,
-  field: optionalText,
-  year: optionalText,
-  location: optionalText,
-  url: safeUrl,
-});
+  return {
+    institution: raw.institution,
+    credential: raw.studyType,
+    field: raw.area,
+    year: raw.endDate,
+    location: raw.location,
+    url: raw.url,
+  };
+};
 
-const readPersonalProject = shape<PersonalProject>({
-  name: optionalText,
-  link: safeUrl,
-  description: text,
-});
+/** `projects[]` entry -> this page's `PersonalProject`. */
+const readPersonalProject: Reader<PersonalProject> = (value, field) => {
+  const raw = shape<{ name: string | undefined; url: string | undefined; description: string }>({
+    name: optionalText,
+    url: safeUrl,
+    description: text,
+  })(value, field);
+  return { name: raw.name, link: raw.url, description: raw.description };
+};
+
+/** A certificate entry -> this page's `Certification`: `identifier` is the id. */
+const readCertification: Reader<Certification> = (value, field) => {
+  const raw = shape<{ name: string; identifier: string | undefined; url: string | undefined }>({
+    name: text,
+    identifier: optionalText,
+    url: safeUrl,
+  })(value, field);
+  return { name: raw.name, id: raw.identifier, url: raw.url };
+};
 
 /**
  * Reads a section that nothing on the page renders, falling back to the
@@ -279,24 +413,25 @@ export function toResumeContent(payload: unknown): ResumeContent | null {
       throw new InvalidFeed("expected an object at data");
     }
     const raw = data as Record<string, unknown>;
+    const basics = raw.basics;
+    if (typeof basics !== "object" || basics === null || Array.isArray(basics)) {
+      throw new InvalidFeed("expected an object at basics");
+    }
 
     return {
-      profile: shape<Profile>({ name: text, title: text, tagline: text })(raw.profile, "profile"),
-      contact: section(readContact, raw.contact, "contact", defaultContent.contact),
-      summary: text(raw.summary, "summary"),
-      skillGroups: arrayOf(readSkillGroup)(raw.skillGroups, "skillGroups"),
-      certifications: arrayOf(shape<Certification>({ name: text, id: optionalText, url: safeUrl }))(
-        raw.certifications,
-        "certifications",
-      ),
-      jobs: arrayOf(readJob)(raw.jobs, "jobs"),
+      profile: readProfile(basics, "basics"),
+      contact: section(readContactFromBasics, basics, "basics", defaultContent.contact),
+      summary: text((basics as Record<string, unknown>).summary, "basics.summary"),
+      skillGroups: arrayOf(readSkillGroup)(raw.skills, "skills"),
+      certifications: arrayOf(readCertification)(raw.certificates, "certificates"),
+      jobs: arrayOf(readJob)(raw.work, "work"),
       education: section(
         arrayOf(readEducation),
         raw.education,
         "education",
         defaultContent.education,
       ),
-      personalProjects: arrayOf(readPersonalProject)(raw.personalProjects, "personalProjects"),
+      personalProjects: arrayOf(readPersonalProject)(raw.projects, "projects"),
     };
   } catch (error) {
     if (error instanceof InvalidFeed) {

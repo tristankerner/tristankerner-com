@@ -64,14 +64,12 @@ describe("toResumeContent", () => {
     expect(content.skillGroups[0].skills[0]).toEqual({
       name: "Feed Linked Skill",
       url: "https://example.com/skill",
-      level: undefined,
-      lastUsed: undefined,
     });
     expect(content.education[0].credential).toBe("Feed Credential");
     expect(content.personalProjects[1].link).toBe("https://example.com/project");
   });
 
-  it("renames the feed's snake_case fields to the ones the page reads", () => {
+  it("renames the feed's official JSON Resume field names to the ones the page reads", () => {
     const content = toResumeContent(feedPayload());
     const [job] = content?.jobs ?? [];
 
@@ -102,32 +100,29 @@ describe("toResumeContent", () => {
   });
 
   it("rejects an end date that is neither a date nor null", () => {
-    expect(toResumeContent(feedWith((data) => (data.jobs[0].end = 2026)))).toBeNull();
+    expect(toResumeContent(feedWith((data) => (data.work[0].endDate = 2026)))).toBeNull();
   });
 
   it.each([
     ["not an object", "nope"],
     ["null", null],
     ["an envelope with no data", { revision_id: 1 }],
-    ["a missing profile", feedWith((data) => delete data.profile)],
-    ["a profile field of the wrong type", feedWith((data) => (data.profile = { name: 42 }))],
-    ["a blank summary", feedWith((data) => (data.summary = "   "))],
-    ["skill groups that aren't an array", feedWith((data) => (data.skill_groups = {}))],
-    ["a certification with no name", feedWith((data) => (data.certifications = [{ id: "1" }]))],
-    ["an unknown role location", feedWith((data) => (data.jobs[0].role_location = "Lunar"))],
+    ["a missing basics", feedWith((data) => delete data.basics)],
+    ["a basics field of the wrong type", feedWith((data) => (data.basics.name = 42))],
+    ["a blank summary", feedWith((data) => (data.basics.summary = "   "))],
+    ["skills that aren't an array", feedWith((data) => (data.skills = {}))],
+    ["a certificate with no name", feedWith((data) => (data.certificates = [{ identifier: "1" }]))],
+    ["an unknown role location", feedWith((data) => (data.work[0].roleLocation = "Lunar"))],
     [
       "an unknown engagement",
-      feedWith((data) => (data.jobs[0].via_employer.engagement = "permanent")),
+      feedWith((data) => (data.work[0].viaEmployer.engagement = "permanent")),
     ],
-    ["a job with no roles", feedWith((data) => (data.jobs[0].roles = []))],
+    ["a job with no roles", feedWith((data) => (data.work[0].roles = []))],
     [
-      "a highlight specific that isn't a string",
-      feedWith((data) => (data.jobs[0].highlights[0].specifics = [7])),
+      "a highlight specific with no detail",
+      feedWith((data) => (data.work[0].highlights[0].specifics = [{ detail: 7 }])),
     ],
-    [
-      "a project with no description",
-      feedWith((data) => (data.personal_projects = [{ name: "x" }])),
-    ],
+    ["a project with no description", feedWith((data) => (data.projects = [{ name: "x" }]))],
   ])("returns null for %s", (_case, payload) => {
     expect(toResumeContent(payload)).toBeNull();
     expect(console.warn).toHaveBeenCalled();
@@ -138,9 +133,7 @@ describe("toResumeContent", () => {
   it.each(["javascript:alert(1)", "data:text/html,<script>", "not a url at all"])(
     "drops the unsafe url %s but keeps the entry it belongs to",
     (url) => {
-      const content = toResumeContent(
-        feedWith((data) => (data.skill_groups[0].skills[0].url = url)),
-      );
+      const content = toResumeContent(feedWith((data) => (data.skills[0].keywords[0].url = url)));
       const [skill] = content?.skillGroups[0].skills ?? [];
 
       expect(skill.name).toBe("Feed Linked Skill");
@@ -154,8 +147,8 @@ describe("toResumeContent", () => {
   // contact and education are part of the resume but nothing renders them, so
   // a problem in either costs that section rather than the whole page.
   it.each([
-    ["contact", (data: LooseFeed) => (data.contact.locations[0].kind = "orbital")],
-    ["education", (data: LooseFeed) => (data.education = [{ credential: "" }])],
+    ["contact", (data: LooseFeed) => (data.basics.location.kind = "orbital")],
+    ["education", (data: LooseFeed) => (data.education = [{ studyType: "" }])],
   ])("falls back to the built-in %s without discarding the live resume", (name, break_) => {
     const content = toResumeContent(feedWith(break_));
 
@@ -169,30 +162,31 @@ describe("toResumeContent", () => {
 
   it("keeps http and https urls", () => {
     const content = toResumeContent(
-      feedWith((data) => (data.skill_groups[0].skills[0].url = "http://example.com/x")),
+      feedWith((data) => (data.skills[0].keywords[0].url = "http://example.com/x")),
     );
 
     expect(content?.skillGroups[0].skills[0].url).toBe("http://example.com/x");
   });
 
-  it("keeps a recognised skill level and drops an unrecognised one", () => {
-    const expert = toResumeContent(
+  // Per-keyword level and lastUsed are a candid self-assessment of a publicly
+  // listed inventory, so the public feed never carries them - even if a
+  // malformed payload tried to.
+  it("never exposes a skill level or lastUsed, even if the feed sends one", () => {
+    const content = toResumeContent(
       feedWith((data) => {
-        const skill = data.skill_groups[0].skills[0];
-        skill.level = "expert";
-        skill.last_used = "2026";
+        const keyword = data.skills[0].keywords[0];
+        keyword.level = "expert";
+        keyword.lastUsed = "2026";
       }),
     );
-    expect(expert?.skillGroups[0].skills[0]).toMatchObject({ level: "expert", lastUsed: "2026" });
-
-    const bogus = toResumeContent(
-      feedWith((data) => (data.skill_groups[0].skills[0].level = "wizard")),
-    );
-    expect(bogus?.skillGroups[0].skills[0].level).toBeUndefined();
+    expect(content?.skillGroups[0].skills[0]).toEqual({
+      name: "Feed Linked Skill",
+      url: "https://example.com/skill",
+    });
   });
 
   it("treats a job without an agency contract as having none", () => {
-    const content = toResumeContent(feedWith((data) => (data.jobs[0].via_employer = null)));
+    const content = toResumeContent(feedWith((data) => (data.work[0].viaEmployer = null)));
 
     expect(content?.jobs[0].viaEmployer).toBeUndefined();
   });

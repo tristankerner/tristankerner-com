@@ -31,7 +31,9 @@ function contentStrings(): [string, string][] {
     for (const highlight of job.highlights) {
       const where = `${job.company}: ${highlight.summary.slice(0, 40)}`;
       entries.push([`${where} (summary)`, highlight.summary]);
-      for (const specific of highlight.specifics) entries.push([`${where} (specific)`, specific]);
+      for (const specific of highlight.specifics) {
+        entries.push([`${where} (specific)`, specific.detail]);
+      }
     }
   }
 
@@ -47,7 +49,9 @@ function proseStrings(): [string, string][] {
     for (const highlight of job.highlights) {
       const where = `${job.company}: ${highlight.summary.slice(0, 40)}`;
       entries.push([`${where} (summary)`, highlight.summary]);
-      for (const specific of highlight.specifics) entries.push([`${where} (specific)`, specific]);
+      for (const specific of highlight.specifics) {
+        entries.push([`${where} (specific)`, specific.detail]);
+      }
     }
   }
 

@@ -176,8 +176,8 @@
                                                         <span>{highlight.summary}</span>
                                                     {/snippet}
                                                     <ul class="ml-5 list-outside list-[circle] space-y-1 text-sm text-gray-500 dark:text-gray-500">
-                                                        {#each highlight.specifics as specific (specific)}
-                                                            <li>{specific}</li>
+                                                        {#each highlight.specifics as specific (specific.detail)}
+                                                            <li>{specific.detail}</li>
                                                         {/each}
                                                     </ul>
                                                 </AccordionItem>

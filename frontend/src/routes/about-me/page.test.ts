@@ -139,7 +139,7 @@ describe("about-me page", () => {
       throw new Error("expected a highlight with specifics in fixture data");
 
     for (const specific of highlightWithSpecifics.specifics) {
-      expect(screen.queryByText(specific)).not.toBeInTheDocument();
+      expect(screen.queryByText(specific.detail)).not.toBeInTheDocument();
     }
 
     const [summaryEl] = screen.getAllByText(highlightWithSpecifics.summary);
@@ -148,7 +148,7 @@ describe("about-me page", () => {
     await fireEvent.click(button);
 
     for (const specific of highlightWithSpecifics.specifics) {
-      expect(screen.getAllByText(specific).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(specific.detail).length).toBeGreaterThan(0);
     }
   });
 

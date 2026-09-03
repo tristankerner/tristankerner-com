@@ -64,17 +64,14 @@ export type Contact = {
   links: ContactLink[];
 };
 
-export type Skill = {
-  name: string;
-  url?: string;
-  /**
-   * How well this is actually known. Optional - absent means unrated, not
-   * expert. Used to choose which of 130+ skills belong on a two-page resume.
-   */
-  level?: "expert" | "working" | "familiar";
-  /** YYYY. The last year this was used in earnest. Optional. */
-  lastUsed?: string;
-};
+/**
+ * `level` and `lastUsed` are deliberately absent: the resume microservice's
+ * public feed withholds them (a candid self-assessment of an inventory the
+ * page publishes in full reads as a disclaimer attached to one's own skill
+ * list). They still exist in the private payload used to tailor an actual
+ * application; they simply never reach this page.
+ */
+export type Skill = { name: string; url?: string };
 export type SkillGroup = { name: string; skills: Skill[] };
 
 export type Certification = {
@@ -130,6 +127,14 @@ export type Job = {
 };
 
 /**
+ * One piece of evidence behind a highlight. An object because the private
+ * payload also carries a `tech` list per specific - narrower than the
+ * highlight's own - which the public feed withholds; `detail` is what's left
+ * once that's stripped.
+ */
+export type Specific = { detail: string };
+
+/**
  * Everything in this type is published on the about-me page. There is
  * deliberately no field for quantified outcomes, their provenance, or the
  * technology stack behind a bullet: figures and tool names that are not already
@@ -151,7 +156,7 @@ export type Highlight = {
    * Supporting evidence and context behind `summary` - the detail a one-line
    * bullet has to drop. Expanded in an accordion on the about-me page.
    */
-  specifics: string[];
+  specifics: Specific[];
 };
 
 const MONTHS = [
