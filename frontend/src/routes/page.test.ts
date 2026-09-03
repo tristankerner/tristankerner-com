@@ -28,8 +28,8 @@ describe("home page", () => {
     render(HomePage, { props: { data, params: {}, form: undefined } });
     expect(screen.getByRole("heading", { level: 1, name: profile.name })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: profile.name })).toBeInTheDocument();
-    expect(screen.getByText(profile.title, { exact: false })).toBeInTheDocument();
-    expect(screen.getByText(profile.tagline, { exact: false })).toBeInTheDocument();
+    expect(screen.getByText(profile.title!, { exact: false })).toBeInTheDocument();
+    expect(screen.getByText(profile.tagline!, { exact: false })).toBeInTheDocument();
   });
 
   it("links to the blog and about-me pages", () => {

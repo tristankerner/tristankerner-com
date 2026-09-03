@@ -26,6 +26,40 @@ describe("buildDocumentXml", () => {
     }
   });
 
+  // The feed's schema leaves almost every field optional and remote.ts reads
+  // them that way, so the same content that reaches the page can reach here
+  // with the halves of a line missing. None of it may produce a stray
+  // separator, an empty bracket, or a bullet with nothing beside it.
+  it("builds valid XML from content carrying only the required fields", () => {
+    const { xml } = buildDocumentXml({
+      profile: { name: "Sparse Person" },
+      contact: { locations: [], links: [] },
+      summary: "Only the required fields.",
+      skillGroups: [{ name: "Sparse Group", skills: [{ name: "Sparse Skill" }] }],
+      certifications: [{ name: "Sparse Cert" }],
+      jobs: [
+        {
+          company: "Sparse Company",
+          end: null,
+          position: "Fallback Position Title",
+          roles: [],
+          highlights: [{ id: "sparse-1", summary: "A sparse highlight.", specifics: [] }],
+        },
+      ],
+      education: [{ institution: "Sparse School" }],
+      personalProjects: [{ name: "Sparse Project" }, {}],
+    });
+
+    expect(
+      new DOMParser().parseFromString(xml, "application/xml").querySelector("parsererror"),
+    ).toBeNull();
+    expect(xml).toContain("Fallback Position Title");
+    expect(xml).toContain("A sparse highlight.");
+    expect(xml).not.toContain("undefined");
+    expect(xml).not.toContain("·");
+    expect(xml).not.toContain("()");
+  });
+
   it("prints RESUME_EMAIL once as text and once as a mailto: relationship target, and no phone number", () => {
     const { xml, relationships } = buildDocumentXml(defaultContent);
 

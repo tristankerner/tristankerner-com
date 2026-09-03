@@ -2,7 +2,15 @@
     import { onMount } from "svelte";
     import { Accordion, AccordionItem, Badge, Spinner, Timeline, TimelineItem } from "flowbite-svelte";
     import profilePhoto from "$lib/assets/profile-photo.jpg";
-    import { defaultContent, jobDurationText, roleDurationText, promotedThroughText, viaEmployerText } from "./content";
+    import {
+        companyContextText,
+        currentRoleText,
+        currentTitleText,
+        defaultContent,
+        jobDurationText,
+        promotedThroughText,
+        viaEmployerText,
+    } from "./content";
     import { fetchResume, readCache } from "./remote";
     import DownloadResumeButton from "./docx/DownloadResumeButton.svelte";
 
@@ -63,10 +71,15 @@
         />
         <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{profile.name}</h1>
-            <p class="text-primary-600 dark:text-primary-500 mt-1 text-lg font-medium">
-                <span>{profile.title}</span> <span class="text-gray-400 dark:text-gray-500" aria-hidden="true">|</span>
-                <span>{profile.tagline}</span>
-            </p>
+            {#if profile.title || profile.tagline}
+                <p class="text-primary-600 dark:text-primary-500 mt-1 text-lg font-medium">
+                    {#if profile.title}<span>{profile.title}</span>{/if}
+                    {#if profile.title && profile.tagline}
+                        <span class="text-gray-400 dark:text-gray-500" aria-hidden="true">|</span>
+                    {/if}
+                    {#if profile.tagline}<span>{profile.tagline}</span>{/if}
+                </p>
+            {/if}
         </div>
         <DownloadResumeButton {content} />
     </section>
@@ -123,6 +136,12 @@
             <h2 class="mb-4 text-xl font-bold text-gray-900 dark:text-white">Experience</h2>
             <Timeline>
                 {#each jobs as job, i (job.company)}
+                    <!-- Each of these is empty when the feed carried none of the optional
+                         fields behind it; the markup below drops the line rather than
+                         rendering a stray separator. See ./content.ts. -->
+                    {@const companyContext = companyContextText(job)}
+                    {@const currentTitle = currentTitleText(job)}
+                    {@const currentRole = currentRoleText(job)}
                     <!-- title is typed as required by flowbite-svelte but only rendered when
                          truthy; we build our own <h3> below instead, so pass "" to satisfy the type. -->
                     <TimelineItem title="" date={jobDurationText(job)} isLast={i === jobs.length - 1}>
@@ -133,15 +152,20 @@
                                 {job.company}
                             {/if}
                         </h3>
-                        <p class="mb-2 text-sm text-gray-500 italic dark:text-gray-400">
-                            <span>{job.companyLocation}</span> &middot; <span>{job.description}</span>
-                        </p>
-                        <p class="mb-1 font-semibold text-gray-700 dark:text-gray-300">
-                            <span>{job.roles[0].title}</span>
-                            <span class="font-normal text-gray-500 dark:text-gray-400">
-                                &middot; <span>{roleDurationText(job.roles[0])}</span> &middot; <span>{job.roleLocation}</span>
-                            </span>
-                        </p>
+                        {#if companyContext}
+                            <p class="mb-2 text-sm text-gray-500 italic dark:text-gray-400">{companyContext}</p>
+                        {/if}
+                        {#if currentTitle || currentRole}
+                            <p class="mb-1 font-semibold text-gray-700 dark:text-gray-300">
+                                {#if currentTitle}<span>{currentTitle}</span>{/if}
+                                {#if currentRole}
+                                    <span class="font-normal text-gray-500 dark:text-gray-400">
+                                        {#if currentTitle}&middot;{/if}
+                                        <span>{currentRole}</span>
+                                    </span>
+                                {/if}
+                            </p>
+                        {/if}
                         {#if job.roles.length > 1 || job.viaEmployer}
                             <div class="mb-3 text-sm text-gray-500 dark:text-gray-400">
                                 {#if job.roles.length > 1}
@@ -215,7 +239,9 @@
                             {/if}
                         </p>
                     {/if}
-                    <p class="text-gray-600 dark:text-gray-400">{project.description}</p>
+                    {#if project.description}
+                        <p class="text-gray-600 dark:text-gray-400">{project.description}</p>
+                    {/if}
                 </li>
             {/each}
         </ul>

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  companyContextText,
+  currentRoleText,
+  currentTitleText,
   jobDurationText,
   jobs,
+  personalProjects,
+  profile,
   promotedThroughText,
   roleDurationText,
   viaEmployerText,
@@ -24,6 +29,11 @@ describe("jobDurationText", () => {
     expect(jobDurationText({ start: "2024-03", end: null })).toBe("March 2024 - Present");
   });
 
+  it("says nothing rather than half a range when there is no start", () => {
+    expect(jobDurationText({ end: "2026-05" })).toBe("");
+    expect(jobDurationText({ end: null })).toBe("");
+  });
+
   // Better to render something odd than to crash the whole page on a typo.
   it("falls back to the raw value when the input is not YYYY-MM", () => {
     expect(jobDurationText({ start: "whenever", end: "2020-13" })).toBe("whenever - 2020-13");
@@ -37,6 +47,62 @@ describe("roleDurationText", () => {
 
   it("reads a null end as still held", () => {
     expect(roleDurationText({ start: "2024", end: null })).toBe("2024 - Present");
+  });
+
+  it("says nothing for an undated role", () => {
+    expect(roleDurationText({ end: null })).toBe("");
+  });
+});
+
+describe("currentTitleText", () => {
+  it("prefers the newest role", () => {
+    expect(
+      currentTitleText({
+        roles: [{ title: "Senior Engineer", end: null }],
+        position: "Engineer",
+      }),
+    ).toBe("Senior Engineer");
+  });
+
+  it("falls back to the feed's own position when there is no role history", () => {
+    expect(currentTitleText({ roles: [], position: "Engineer" })).toBe("Engineer");
+  });
+
+  it("returns an empty string when the entry names no title at all", () => {
+    expect(currentTitleText({ roles: [] })).toBe("");
+  });
+});
+
+describe("currentRoleText", () => {
+  it("joins the role's dates and where the work was done", () => {
+    expect(
+      currentRoleText({
+        roles: [{ title: "Engineer", start: "2024", end: null }],
+        roleLocation: "Remote",
+      }),
+    ).toBe("2024 - Present · Remote");
+  });
+
+  it("drops the separator along with whichever half is missing", () => {
+    expect(currentRoleText({ roles: [], roleLocation: "Remote" })).toBe("Remote");
+    expect(currentRoleText({ roles: [{ title: "Engineer", start: "2024", end: null }] })).toBe(
+      "2024 - Present",
+    );
+    expect(currentRoleText({ roles: [] })).toBe("");
+  });
+});
+
+describe("companyContextText", () => {
+  it("joins where the company is and what it does", () => {
+    expect(companyContextText({ companyLocation: "Austin, TX", description: "Payments" })).toBe(
+      "Austin, TX · Payments",
+    );
+  });
+
+  it("drops the separator along with whichever half is missing", () => {
+    expect(companyContextText({ companyLocation: "Austin, TX" })).toBe("Austin, TX");
+    expect(companyContextText({ description: "Payments" })).toBe("Payments");
+    expect(companyContextText({})).toBe("");
   });
 });
 
@@ -57,6 +123,12 @@ describe("viaEmployerText", () => {
   it("returns an empty string for direct employment", () => {
     expect(viaEmployerText({})).toBe("");
   });
+
+  it("names the agency without a window when the dates are absent", () => {
+    expect(viaEmployerText({ viaEmployer: { name: "Some Agency" } })).toBe(
+      "Contract via Some Agency",
+    );
+  });
 });
 
 describe("promotedThroughText", () => {
@@ -64,6 +136,17 @@ describe("promotedThroughText", () => {
     expect(
       promotedThroughText({ roles: [{ title: "Engineer", start: "2020", end: "2024" }] }),
     ).toBe("");
+  });
+
+  it("names an undated prior role without an empty bracket after it", () => {
+    expect(
+      promotedThroughText({
+        roles: [
+          { title: "Senior Engineer", start: "2022", end: null },
+          { title: "Engineer", end: "2022" },
+        ],
+      }),
+    ).toBe("Promoted through Engineer.");
   });
 
   it("mentions a single prior role with its duration", () => {
@@ -105,6 +188,30 @@ describe("promotedThroughText", () => {
   });
 });
 
+// The feed's schema marks almost every field below optional, and remote.ts
+// reads them that way so one absent field cannot cost the page every section
+// (see its module docstring). This resume nonetheless carries all of them,
+// which is what lets the page and docx tests assert on them directly instead
+// of guarding each one. If that ever stops being true, this fails first and
+// says so, rather than those tests quietly asserting on `undefined`.
+describe("the real content", () => {
+  it("carries every optional field the rendering tests assert on", () => {
+    expect(profile.title).toBeTypeOf("string");
+    expect(profile.tagline).toBeTypeOf("string");
+
+    for (const job of jobs) {
+      expect(job.companyLocation).toBeTypeOf("string");
+      expect(job.description).toBeTypeOf("string");
+      expect(job.roleLocation).toBeTypeOf("string");
+      expect(job.roles.length).toBeGreaterThan(0);
+    }
+
+    for (const project of personalProjects) {
+      expect(project.description).toBeTypeOf("string");
+    }
+  });
+});
+
 // Guards the real content against the typo the derivation can no longer catch
 // for us now that the display prose isn't written out by hand.
 describe("the real job data", () => {
@@ -127,9 +234,11 @@ describe("the real job data", () => {
   it("keeps any contract window aligned with its job's own dates", () => {
     for (const job of jobs) {
       if (!job.viaEmployer) continue;
-      expect(job.viaEmployer.start).toBe(job.start);
-      expect(job.viaEmployer.end > job.viaEmployer.start).toBe(true);
-      if (job.end !== null) expect(job.viaEmployer.end < job.end).toBe(true);
+      const { start, end } = job.viaEmployer;
+      expect(start).toBe(job.start);
+      expect(end).toBeTypeOf("string");
+      expect(end! > start!).toBe(true);
+      if (job.end !== null) expect(end! < job.end).toBe(true);
     }
   });
 });

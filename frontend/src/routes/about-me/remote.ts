@@ -24,6 +24,19 @@
  * The page must survive the feed being wrong or gone. Failures resolve to
  * `null`, which the page reads as "keep the content compiled into the build" -
  * a resume a few revisions behind beats a blank page.
+ *
+ * That last one is why the line between "absent" and "malformed" matters more
+ * than it looks. Rejecting is all-or-nothing: one unreadable field anywhere
+ * costs every section, silently, and the visitor sees a resume that stopped
+ * updating rather than an error. So a field is required here only when it is
+ * one of the three the page keys on (`basics.name`, `work[].name`,
+ * `highlights[].id`) or one the feed's own metadata document declares
+ * `required: true` (`basics.summary`, `highlights[].summary`,
+ * `skills[].keywords[].name`, `work[].roles[].title`). Everything else the
+ * JSON Resume schema leaves optional is read as optional and rendered around -
+ * see the display helpers in ./content.ts. A field that is *present and the
+ * wrong shape* is still a rejection either way: that is a broken feed, not a
+ * sparse one.
  */
 
 import {
@@ -170,12 +183,9 @@ function shape<T>(fields: { [K in keyof T]-?: Reader<T[K]> }): Reader<T> {
   };
 }
 
-function arrayOf<T>(item: Reader<T>, minLength = 0): Reader<T[]> {
+function arrayOf<T>(item: Reader<T>): Reader<T[]> {
   return (value, field) => {
     if (!Array.isArray(value)) throw new InvalidFeed(`expected an array at ${field}`);
-    if (value.length < minLength) {
-      throw new InvalidFeed(`expected at least ${minLength} entries at ${field}`);
-    }
     return value.map((entry, i) => item(entry, `${field}[${i}]`));
   };
 }
@@ -224,10 +234,10 @@ const readContactFromBasics: Reader<Contact> = (value, field) => {
 
 /** `basics.name` / `.label` / `.tagline` -> this page's `Profile`. */
 const readProfile: Reader<Profile> = (value, field) => {
-  const raw = shape<{ name: string; label: string; tagline: string }>({
+  const raw = shape<{ name: string; label: string | undefined; tagline: string | undefined }>({
     name: text,
-    label: text,
-    tagline: text,
+    label: optionalText,
+    tagline: optionalText,
   })(value, field);
   return { name: raw.name, title: raw.label, tagline: raw.tagline };
 };
@@ -250,9 +260,9 @@ const readSkillGroup: Reader<SkillGroup> = (value, field) => {
 };
 
 const readRole: Reader<Role> = (value, field) => {
-  const raw = shape<{ title: string; startDate: string; endDate: string | null }>({
+  const raw = shape<{ title: string; startDate: string | undefined; endDate: string | null }>({
     title: text,
-    startDate: text,
+    startDate: optionalText,
     endDate: nullable,
   })(value, field);
   return { title: raw.title, start: raw.startDate, end: raw.endDate };
@@ -261,14 +271,14 @@ const readRole: Reader<Role> = (value, field) => {
 const readViaEmployer: Reader<ViaEmployer> = (value, field) => {
   const raw = shape<{
     name: string;
-    startDate: string;
-    endDate: string;
-    engagement: "contract-to-hire" | "contract";
+    startDate: string | undefined;
+    endDate: string | undefined;
+    engagement: "contract-to-hire" | "contract" | undefined;
   }>({
     name: text,
-    startDate: text,
-    endDate: text,
-    engagement: literal(["contract-to-hire", "contract"] as const),
+    startDate: optionalText,
+    endDate: optionalText,
+    engagement: optionalOf(literal(["contract-to-hire", "contract"] as const)),
   })(value, field);
   return { name: raw.name, start: raw.startDate, end: raw.endDate, engagement: raw.engagement };
 };
@@ -290,25 +300,28 @@ const readJob: Reader<Job> = (value, field) => {
   const raw = shape<{
     name: string;
     url: string | undefined;
-    location: string;
-    description: string;
-    startDate: string;
+    location: string | undefined;
+    description: string | undefined;
+    position: string | undefined;
+    startDate: string | undefined;
     endDate: string | null;
-    roleLocation: "On-site" | "Hybrid" | "Remote";
-    // The page reads roles[0] unconditionally for the current title; a job
-    // with none would render `undefined` rather than fail here, which is worse.
+    roleLocation: "On-site" | "Hybrid" | "Remote" | undefined;
+    // An entry with no role history is read rather than rejected: `position`
+    // is the schema's own headline title and stands in for it. See
+    // `currentTitleText` in ./content.ts.
     roles: Role[];
     highlights: Highlight[];
     viaEmployer: ViaEmployer | undefined;
   }>({
     name: text,
     url: safeUrl,
-    location: text,
-    description: text,
-    startDate: text,
+    location: optionalText,
+    description: optionalText,
+    position: optionalText,
+    startDate: optionalText,
     endDate: nullable,
-    roleLocation: literal(["On-site", "Hybrid", "Remote"] as const),
-    roles: arrayOf(readRole, 1),
+    roleLocation: optionalOf(literal(["On-site", "Hybrid", "Remote"] as const)),
+    roles: arrayOf(readRole),
     highlights: arrayOf(readHighlight),
     viaEmployer: optionalOf(readViaEmployer),
   })(value, field);
@@ -322,6 +335,7 @@ const readJob: Reader<Job> = (value, field) => {
     viaEmployer: raw.viaEmployer,
     description: raw.description,
     roleLocation: raw.roleLocation,
+    position: raw.position,
     roles: raw.roles,
     highlights: raw.highlights,
   };
@@ -331,14 +345,14 @@ const readJob: Reader<Job> = (value, field) => {
 const readEducation: Reader<Education> = (value, field) => {
   const raw = shape<{
     institution: string | undefined;
-    studyType: string;
+    studyType: string | undefined;
     area: string | undefined;
     endDate: string | undefined;
     location: string | undefined;
     url: string | undefined;
   }>({
     institution: optionalText,
-    studyType: text,
+    studyType: optionalText,
     area: optionalText,
     endDate: optionalText,
     location: optionalText,
@@ -357,10 +371,14 @@ const readEducation: Reader<Education> = (value, field) => {
 
 /** `projects[]` entry -> this page's `PersonalProject`. */
 const readPersonalProject: Reader<PersonalProject> = (value, field) => {
-  const raw = shape<{ name: string | undefined; url: string | undefined; description: string }>({
+  const raw = shape<{
+    name: string | undefined;
+    url: string | undefined;
+    description: string | undefined;
+  }>({
     name: optionalText,
     url: safeUrl,
-    description: text,
+    description: optionalText,
   })(value, field);
   return { name: raw.name, link: raw.url, description: raw.description };
 };

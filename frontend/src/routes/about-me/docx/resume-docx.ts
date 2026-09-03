@@ -6,7 +6,14 @@
  * (no phone number, a different email, two extra jobs, and so on) are listed
  * in the PR description rather than in code.
  */
-import { jobDurationText, roleDurationText, viaEmployerText, type ResumeContent } from "../content";
+import {
+  currentRoleText,
+  currentTitleText,
+  jobDurationText,
+  roleDurationText,
+  viaEmployerText,
+  type ResumeContent,
+} from "../content";
 import {
   BULLET_NUM_ID,
   COLOR,
@@ -125,8 +132,10 @@ export function buildDocumentXml(content: ResumeContent): {
         bottomBorder: { size: 4, space: 6, color: COLOR.rule },
         spacing: { after: 82 },
       },
+      // Kept even when both halves are absent: the paragraph carries the rule
+      // under the header, which is layout rather than content.
       [
-        run(`${profile.title}  |  ${profile.tagline}`, {
+        run([profile.title, profile.tagline].filter(Boolean).join("  |  "), {
           color: COLOR.body,
           size: SIZE.tagline,
           spacing: 12,
@@ -201,37 +210,45 @@ export function buildDocumentXml(content: ResumeContent): {
     paragraphs.push(
       paragraph({ keepNext: true, rightTabAt: RIGHT_TAB, spacing: { before: 130, after: 0 } }, [
         run(job.company, { bold: true, color: COLOR.heading, size: SIZE.company }),
-        run(`   ${job.companyLocation}`, { color: COLOR.muted, size: SIZE.small }),
+        run(job.companyLocation ? `   ${job.companyLocation}` : "", {
+          color: COLOR.muted,
+          size: SIZE.small,
+        }),
         tab(),
         run(jobDurationText(job), { bold: true, color: COLOR.muted, size: SIZE.small }),
       ]),
     );
 
     // 10. Job description
-    paragraphs.push(
-      paragraph({ keepNext: true, spacing: { before: 18, after: 0 } }, [
-        run(job.description, { italic: true, color: COLOR.muted, size: SIZE.small }),
-      ]),
-    );
+    if (job.description) {
+      paragraphs.push(
+        paragraph({ keepNext: true, spacing: { before: 18, after: 0 } }, [
+          run(job.description, { italic: true, color: COLOR.muted, size: SIZE.small }),
+        ]),
+      );
+    }
 
     // 11. Current role
-    const currentRole = job.roles[0]!;
-    paragraphs.push(
-      paragraph({ keepNext: true, rightTabAt: RIGHT_TAB, spacing: { before: 76, after: 0 } }, [
-        run(currentRole.title, { bold: true, color: COLOR.body, size: SIZE.body }),
-        tab(),
-        run(`${roleDurationText(currentRole)} · ${job.roleLocation}`, {
-          color: COLOR.muted,
-          size: SIZE.small,
-        }),
-      ]),
-    );
+    const currentTitle = currentTitleText(job);
+    const currentRole = currentRoleText(job);
+    if (currentTitle || currentRole) {
+      paragraphs.push(
+        paragraph({ keepNext: true, rightTabAt: RIGHT_TAB, spacing: { before: 76, after: 0 } }, [
+          run(currentTitle, { bold: true, color: COLOR.body, size: SIZE.body }),
+          tab(),
+          run(currentRole, { color: COLOR.muted, size: SIZE.small }),
+        ]),
+      );
+    }
 
     // 12. Promoted through
     if (job.roles.length > 1) {
       const priorRoles = job.roles
         .slice(1)
-        .map((role) => `${role.title} (${roleDurationText(role)})`)
+        .map((role) => {
+          const duration = roleDurationText(role);
+          return duration ? `${role.title} (${duration})` : role.title;
+        })
         .join("  ·  ");
       paragraphs.push(
         paragraph({ keepNext: true, spacing: { before: 14, after: 74 } }, [
@@ -268,7 +285,11 @@ export function buildDocumentXml(content: ResumeContent): {
     if (project.name) {
       runs.push(run(`${project.name}: `, { bold: true, color: COLOR.body, size: SIZE.body }));
     }
-    runs.push(run(project.description, { color: COLOR.body, size: SIZE.body }));
+    if (project.description) {
+      runs.push(run(project.description, { color: COLOR.body, size: SIZE.body }));
+    }
+    // An entry with neither would be a bullet with nothing beside it.
+    if (runs.length === 0) continue;
     paragraphs.push(
       paragraph(
         { style: "ListParagraph", numId: BULLET_NUM_ID, spacing: { after: 54, line: 238 } },
@@ -281,7 +302,7 @@ export function buildDocumentXml(content: ResumeContent): {
   paragraphs.push(sectionHeading(SECTION_HEADINGS.education));
   for (const edu of education) {
     const parts = [
-      edu.credential + (edu.field ? `, ${edu.field}` : ""),
+      [edu.credential, edu.field].filter(Boolean).join(", "),
       edu.institution,
       edu.location,
       edu.year,

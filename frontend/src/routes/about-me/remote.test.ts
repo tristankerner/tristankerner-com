@@ -117,15 +117,64 @@ describe("toResumeContent", () => {
       "an unknown engagement",
       feedWith((data) => (data.work[0].viaEmployer.engagement = "permanent")),
     ],
-    ["a job with no roles", feedWith((data) => (data.work[0].roles = []))],
+    ["a work entry with no company name", feedWith((data) => delete data.work[0].name)],
     [
       "a highlight specific with no detail",
       feedWith((data) => (data.work[0].highlights[0].specifics = [{ detail: 7 }])),
     ],
-    ["a project with no description", feedWith((data) => (data.projects = [{ name: "x" }]))],
+    ["a work entry that isn't an object", feedWith((data) => (data.work = [42]))],
   ])("returns null for %s", (_case, payload) => {
     expect(toResumeContent(payload)).toBeNull();
     expect(console.warn).toHaveBeenCalled();
+  });
+
+  // Rejecting is all-or-nothing - one unreadable field costs every section,
+  // silently - so absence is only ever a rejection for the handful of fields
+  // remote.ts's docstring names. Everything the JSON Resume schema leaves
+  // optional has to survive being left out.
+  it("keeps a work entry carrying nothing but the fields that are required", () => {
+    const content = toResumeContent(
+      feedWith((data) => {
+        data.work[0] = {
+          name: "Feed Sparse Company",
+          highlights: [{ id: "sparse", summary: "Feed sparse highlight.", specifics: [] }],
+          roles: [],
+        };
+      }),
+    );
+
+    const [job] = content?.jobs ?? [];
+    expect(job.company).toBe("Feed Sparse Company");
+    expect(job.companyLocation).toBeUndefined();
+    expect(job.description).toBeUndefined();
+    expect(job.roleLocation).toBeUndefined();
+    expect(job.start).toBeUndefined();
+    expect(job.roles).toEqual([]);
+    expect(job.highlights[0].summary).toBe("Feed sparse highlight.");
+  });
+
+  it("reads the schema's own position as the title when there is no role history", () => {
+    const content = toResumeContent(
+      feedWith((data) => {
+        data.work[0].roles = [];
+        data.work[0].position = "Feed Position Title";
+      }),
+    );
+
+    expect(content?.jobs[0].position).toBe("Feed Position Title");
+    expect(content?.jobs[0].roles).toEqual([]);
+  });
+
+  it("keeps a project and an education entry that carry only optional fields", () => {
+    const content = toResumeContent(
+      feedWith((data) => {
+        data.projects = [{ name: "Feed Bare Project" }];
+        data.education = [{ institution: "Feed Bare School" }];
+      }),
+    );
+
+    expect(content?.personalProjects[0]).toEqual({ name: "Feed Bare Project" });
+    expect(content?.education[0]).toEqual({ institution: "Feed Bare School" });
   });
 
   // The page puts these straight into href attributes, which Svelte does not
@@ -148,7 +197,10 @@ describe("toResumeContent", () => {
   // a problem in either costs that section rather than the whole page.
   it.each([
     ["contact", (data: LooseFeed) => (data.basics.location.kind = "orbital")],
-    ["education", (data: LooseFeed) => (data.education = [{ studyType: "" }])],
+    // An entry that isn't an object, rather than one with a missing field:
+    // every field of an education entry is optional now, so absence alone can
+    // no longer make one malformed.
+    ["education", (data: LooseFeed) => (data.education = [42])],
   ])("falls back to the built-in %s without discarding the live resume", (name, break_) => {
     const content = toResumeContent(feedWith(break_));
 

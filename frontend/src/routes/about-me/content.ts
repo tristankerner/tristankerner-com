@@ -23,7 +23,14 @@ import {
   summary,
 } from "./resume-data.generated";
 
-export type Profile = { name: string; title: string; tagline: string };
+/**
+ * `title` and `tagline` are optional because the feed's schema says they are.
+ * JSON Resume requires almost nothing, and the resume microservice is a
+ * standalone project that models the schema rather than this page's layout, so
+ * every field it marks optional has to be one this page can render without.
+ * See remote.ts for where the line between "absent" and "malformed" is drawn.
+ */
+export type Profile = { name: string; title?: string; tagline?: string };
 
 export type ContactLink = { label: string; url: string };
 
@@ -83,8 +90,8 @@ export type Certification = {
 
 export type Role = {
   title: string;
-  /** YYYY. */
-  start: string;
+  /** YYYY. Absent for an undated role, which renders as a bare title. */
+  start?: string;
   /** YYYY, or null for a role still held. */
   end: string | null;
 };
@@ -104,24 +111,31 @@ export type ViaEmployer = {
   /** Legal employer of record for this window. */
   name: string;
   /** YYYY-MM. Matches the job's own start; the engagement began here. */
-  start: string;
+  start?: string;
   /** YYYY-MM. The date employment converted to `company` directly. */
-  end: string;
-  engagement: "contract-to-hire" | "contract";
+  end?: string;
+  engagement?: "contract-to-hire" | "contract";
 };
 
 export type Job = {
   company: string;
   companyUrl?: string;
-  companyLocation: string;
+  companyLocation?: string;
   /** YYYY-MM. The start of the engagement, which may predate direct employment. */
-  start: string;
+  start?: string;
   /** YYYY-MM, or null for current employment. */
   end: string | null;
   /** Present when the engagement began as an agency contract. */
   viaEmployer?: ViaEmployer;
-  description: string;
-  roleLocation: RoleLocation;
+  description?: string;
+  roleLocation?: RoleLocation;
+  /**
+   * The feed's own headline title, which restates `roles[0].title`. Read only
+   * as the fallback in `currentTitleText`: an entry may carry a position
+   * without a role history, and then this is the only title there is.
+   */
+  position?: string;
+  /** Most-recent first. May be empty — see `position`. */
   roles: Role[];
   highlights: Highlight[];
 };
@@ -178,6 +192,10 @@ const MONTHS = [
 // so the two can't disagree. A null end means the position is still held.
 const PRESENT = "Present";
 
+// The separator between two optional halves of a line. Named because it is
+// only ever written where dropping it along with its missing half matters.
+const MIDDLE_DOT = "·";
+
 /** "2022-08" -> "August 2022". Falls back to the raw value if it isn't YYYY-MM. */
 function monthYearText(value: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(value);
@@ -186,14 +204,46 @@ function monthYearText(value: string): string {
   return month ? `${month} ${match[1]}` : value;
 }
 
+// Every helper below returns "" rather than a partial phrase when the feed did
+// not carry what it needs. A date range with one end missing, or a separator
+// with nothing on one side of it, reads as a rendering fault; nothing reads as
+// a field that was not filled in.
+
 /** Employment dates to the month, e.g. "August 2022 - May 2026". */
 export function jobDurationText({ start, end }: Pick<Job, "start" | "end">): string {
+  if (!start) return "";
   return `${monthYearText(start)} - ${end === null ? PRESENT : monthYearText(end)}`;
 }
 
 /** Role dates to the year, e.g. "2024 - 2026". */
 export function roleDurationText({ start, end }: Pick<Role, "start" | "end">): string {
+  if (!start) return "";
   return `${start} - ${end ?? PRESENT}`;
+}
+
+/** The title currently held: the newest role, or the feed's own `position`
+ * for an entry that carries no role history. */
+export function currentTitleText({ roles, position }: Pick<Job, "roles" | "position">): string {
+  return roles[0]?.title ?? position ?? "";
+}
+
+/** What sits after the current title, e.g. "2024 - Present · Remote". */
+export function currentRoleText({
+  roles,
+  roleLocation,
+}: Pick<Job, "roles" | "roleLocation">): string {
+  const current = roles[0];
+  return [current ? roleDurationText(current) : "", roleLocation]
+    .filter(Boolean)
+    .join(` ${MIDDLE_DOT} `);
+}
+
+/** The line under a company name, e.g. "Austin, TX · Payment processing". */
+export function companyContextText({
+  companyLocation,
+  description,
+}: Pick<Job, "companyLocation" | "description">): string {
+  return [companyLocation, description].filter(Boolean).join(` ${MIDDLE_DOT} `);
 }
 
 /**
@@ -204,13 +254,17 @@ export function roleDurationText({ start, end }: Pick<Role, "start" | "end">): s
 export function viaEmployerText({ viaEmployer }: Pick<Job, "viaEmployer">): string {
   if (!viaEmployer) return "";
   const { name, start, end } = viaEmployer;
+  if (!start || !end) return `Contract via ${name}`;
   return `Contract via ${name}, ${monthYearText(start)} - ${monthYearText(end)}`;
 }
 
 // roles are ordered most-recent first; everything after the first entry
 // is prior-role history used to generate the "Promoted through" line.
 export function promotedThroughText({ roles }: Pick<Job, "roles">): string {
-  const priorRoles = roles.slice(1).map((r) => `${r.title} (${roleDurationText(r)})`);
+  const priorRoles = roles.slice(1).map((r) => {
+    const duration = roleDurationText(r);
+    return duration ? `${r.title} (${duration})` : r.title;
+  });
   if (priorRoles.length === 0) return "";
   if (priorRoles.length === 1) return `Promoted through ${priorRoles[0]}.`;
   const last = priorRoles.at(-1);
@@ -222,7 +276,7 @@ export type Education = {
   /** Optional: an equivalency credential like a GED is not issued by a school. */
   institution?: string;
   /** e.g. "B.S.", "Certificate", "Coursework". */
-  credential: string;
+  credential?: string;
   field?: string;
   /** Completion year, YYYY. Omit if not completed. */
   year?: string;
@@ -230,7 +284,7 @@ export type Education = {
   url?: string;
 };
 
-export type PersonalProject = { name?: string; link?: string; description: string };
+export type PersonalProject = { name?: string; link?: string; description?: string };
 
 /** Every section of the resume, in one value. */
 export type ResumeContent = {

@@ -25,7 +25,7 @@ function contentStrings(): [string, string][] {
   for (const cert of certifications) entries.push([`certification.${cert.name}`, cert.name]);
 
   for (const job of jobs) {
-    entries.push([`${job.company}.description`, job.description]);
+    if (job.description) entries.push([`${job.company}.description`, job.description]);
     for (const role of job.roles) entries.push([`${job.company}.role`, role.title]);
 
     for (const highlight of job.highlights) {

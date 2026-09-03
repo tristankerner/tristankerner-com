@@ -46,8 +46,8 @@ describe("about-me page", () => {
     render(AboutMePage);
     expect(screen.getByRole("heading", { level: 1, name: profile.name })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: profile.name })).toBeInTheDocument();
-    expect(screen.getAllByText(profile.title, { exact: false }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(profile.tagline, { exact: false }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(profile.title!, { exact: false }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(profile.tagline!, { exact: false }).length).toBeGreaterThan(0);
   });
 
   it("renders a heading for each top-level section", () => {
@@ -99,8 +99,8 @@ describe("about-me page", () => {
         screen.getAllByText(roleDurationText(job.roles[0]), { exact: false }).length,
       ).toBeGreaterThan(0);
       expect(screen.getAllByText(jobDurationText(job), { exact: false }).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(job.roleLocation, { exact: false }).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(job.companyLocation, { exact: false }).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(job.roleLocation!, { exact: false }).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(job.companyLocation!, { exact: false }).length).toBeGreaterThan(0);
 
       const expectedPromotion = promotedThroughText(job);
       if (expectedPromotion) {
@@ -158,7 +158,7 @@ describe("about-me page", () => {
       if (project.name) {
         expect(screen.getAllByText(project.name).length).toBeGreaterThan(0);
       }
-      expect(screen.getAllByText(project.description).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(project.description!).length).toBeGreaterThan(0);
     }
   });
 
@@ -259,7 +259,7 @@ describe("about-me page", () => {
       expect(screen.getByText("Feed summary paragraph.")).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Feed Current Company" })).toBeInTheDocument();
       expect(screen.getAllByText("Feed Named Project").length).toBeGreaterThan(0);
-      expect(screen.queryByText(profile.tagline)).not.toBeInTheDocument();
+      expect(screen.queryByText(profile.tagline!)).not.toBeInTheDocument();
     });
 
     it("shows a spinner while the feed is in flight and removes it afterwards", async () => {
