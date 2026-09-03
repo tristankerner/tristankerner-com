@@ -993,11 +993,11 @@ export const jobs: Job[] = [
       },
       {
         id: "freelance-data-engineering",
-        summary: "Ad-hoc data migrations and data analysis",
+        summary: "Ad-hoc data migrations and data analysis.",
         specifics: [
           {
             detail:
-              "Created one-off data migration scripts mapping old data sources to new systems (e.g. customers from legacy CRM to new eCommerce and Marketing platforms.",
+              "Created one-off data migration scripts mapping old data sources to new systems (e.g. customers from legacy CRM to new eCommerce and Marketing platforms).",
           },
           {
             detail:
