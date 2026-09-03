@@ -76,7 +76,7 @@ export const CACHE_KEY = "about-me:resume:v2";
 export const CACHE_TTL_MS = 30 * 60 * 1000;
 
 /** A hung request must not leave the page spinning indefinitely. */
-const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_TIMEOUT_MS = 20_000;
 
 /**
  * Thrown by the readers and caught once, at the top. The alternative - every

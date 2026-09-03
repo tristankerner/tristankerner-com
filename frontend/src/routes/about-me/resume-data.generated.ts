@@ -25,7 +25,7 @@ import type {
 export const profile: Profile = {
   name: "Tristan Kerner",
   title: "Senior Software Engineer & Administrator",
-  tagline: "Platform, Integrations, Salesforce",
+  tagline: "Full-Stack, Integrations, Data, Salesforce",
 };
 
 export const contact: Contact = {
@@ -637,9 +637,10 @@ export const jobs: Job[] = [
     description:
       "EdTech SaaS provider of school management software, strategy, and consulting for private and independent schools.",
     roleLocation: "Remote",
+    position: "Senior Software Engineer, Full-Stack/Integrations/Data/Salesforce",
     roles: [
       {
-        title: "Senior Software Engineer, Platform / Integrations / Salesforce",
+        title: "Senior Software Engineer, Full-Stack/Integrations/Data/Salesforce",
         start: "2024",
         end: "2026",
       },
@@ -865,6 +866,7 @@ export const jobs: Job[] = [
     description:
       "Former parent group of Blackbird Vineyards and Aerena Galleries & Gardens — DTC wine and fine art brands",
     roleLocation: "Hybrid",
+    position: "Software & Systems Integration Lead",
     roles: [
       {
         title: "Software & Systems Integration Lead",
@@ -952,6 +954,7 @@ export const jobs: Job[] = [
     end: null,
     description: "Independent web development practice.",
     roleLocation: "Hybrid",
+    position: "Freelance Web Developer",
     roles: [
       {
         title: "Freelance Web Developer",
@@ -990,7 +993,7 @@ export const jobs: Job[] = [
       },
       {
         id: "freelance-data-engineering",
-        summary: "Ad-hoc data migrations and data analysis.",
+        summary: "Ad-hoc data migrations and data analysis",
         specifics: [
           {
             detail:
@@ -1011,6 +1014,7 @@ export const jobs: Job[] = [
     end: "2012-06",
     description: "QuickBooks consulting and accounting systems support.",
     roleLocation: "Hybrid",
+    position: "QuickBooks Pro Advisor",
     roles: [
       {
         title: "QuickBooks Pro Advisor",
