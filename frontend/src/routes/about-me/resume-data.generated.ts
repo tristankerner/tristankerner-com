@@ -63,7 +63,7 @@ export const contact: Contact = {
 };
 
 export const summary: string =
-  "Senior software engineer and business systems specialist with 17+ years building enterprise integrations, automation platforms, and API-driven SaaS applications inside and outside the Salesforce ecosystem. Recent work cut integration failures by 89%, reduced Workato billable usage by 98%, and avoided roughly $850K in projected annual overage costs. Pairs hands-on engineering (Python, C#, Apex, SQL, REST/SOAP APIs, modern iPaaS) with business analysis depth — requirements elicitation, process mapping, gap analysis, and UAT — partnering with Sales, Marketing, Product, and executive stakeholders on Agile teams to turn business requirements into reliable, scalable, well-tested solutions across enterprise SaaS, eCommerce, and DTC environments.";
+  "Senior engineer and business systems specialist who turns ambiguous business requirements into working systems. 17+ years across enterprise SaaS, eCommerce, and DTC, building integrations and automation in Python, C#, and Apex, plus the process mapping, gap analysis, and UAT that make them stick. Picks up unfamiliar stacks and APIs fast and owns projects end to end.";
 
 export const skillGroups: SkillGroup[] = [
   {
@@ -1001,7 +1001,7 @@ export const jobs: Job[] = [
           },
           {
             detail:
-              "Spun up VPS to host Postgres and Redeash (configured with SSO), then loaded legacy CRM data into dedicated Postgres database, created template reports in Redash for users to self-service data exports and legacy data research (till final sunset date).",
+              "Spun up VPS to host Postgres and Redash (configured with SSO), then loaded legacy CRM data into dedicated Postgres database, created template reports in Redash for users to self-service data exports and legacy data research (till final sunset date).",
           },
         ],
       },
@@ -1041,12 +1041,27 @@ export const education: Education[] = [
 
 export const personalProjects: PersonalProject[] = [
   {
+    name: "resume-cv-mcp-api",
+    link: "https://github.com/tristankerner/resume-cv-mcp-api",
+    description:
+      "A resume & resume skill served as structured data over HTTP (public version) and MCP (includes private notes), along with lite application tracking features. Built with Claude Code, FastAPI, FastMCP, SQLAlchemy (SQLite or PostgreSQL).",
+    highlights: [],
+  },
+  {
+    name: "resume-cv-mcp-api-web-client",
+    link: "https://github.com/tristankerner/resume-cv-mcp-api-web-client/",
+    description:
+      "A dedicated web client for interacting with the resume-cv-mcp-api, built with Claude Code, React, Radix, Tailwind. Optionally served directly via resume-cv-mcp-api.",
+    highlights: [],
+  },
+  {
     description:
       "Implemented a fault-tolerant, scalable integration system in Python as a proof of concept, using RabbitMQ, Redis, PostgreSQL, and FastAPI.",
     highlights: [],
   },
   {
     name: "This Website",
+    link: "https://github.com/tristankerner/tristankerner-com",
     description:
       "Built this personal site and blog with Rust, actix-web, SvelteKit, Tailwind, and Flowbite — optimized to run on minimal hardware.",
     highlights: [],
