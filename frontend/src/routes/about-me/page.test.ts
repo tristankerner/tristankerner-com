@@ -262,6 +262,38 @@ describe("about-me page", () => {
       expect(screen.queryByText(profile.tagline!)).not.toBeInTheDocument();
     });
 
+    it("renders a project's highlights, expandable when they carry specifics", async () => {
+      stubFeed(feedResponse(feedPayload()));
+      render(AboutMePage);
+
+      await waitFor(() => {
+        expect(screen.getAllByText("Feed Named Project").length).toBeGreaterThan(0);
+      });
+
+      const [summaryEl] = screen.getAllByText("Feed project highlight summary.");
+      expect(screen.queryByText("Feed project highlight specific.")).not.toBeInTheDocument();
+
+      const button = summaryEl.closest("button");
+      if (!button) throw new Error("expected the project highlight to be inside an accordion");
+      await fireEvent.click(button);
+
+      expect(screen.getAllByText("Feed project highlight specific.").length).toBeGreaterThan(0);
+    });
+
+    it("does not wrap a project highlight without specifics in an accordion", async () => {
+      stubFeed(feedResponse(feedPayload()));
+      render(AboutMePage);
+
+      await waitFor(() => {
+        expect(
+          screen.getAllByText("Feed project highlight without specifics.").length,
+        ).toBeGreaterThan(0);
+      });
+
+      const [summaryEl] = screen.getAllByText("Feed project highlight without specifics.");
+      expect(summaryEl.closest("button")).not.toBeInTheDocument();
+    });
+
     it("shows a spinner while the feed is in flight and removes it afterwards", async () => {
       let resolveFeed: (response: Response) => void = () => {};
       stubFeed(new Promise<Response>((resolve) => (resolveFeed = resolve)));

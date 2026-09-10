@@ -1043,10 +1043,12 @@ export const personalProjects: PersonalProject[] = [
   {
     description:
       "Implemented a fault-tolerant, scalable integration system in Python as a proof of concept, using RabbitMQ, Redis, PostgreSQL, and FastAPI.",
+    highlights: [],
   },
   {
     name: "This Website",
     description:
       "Built this personal site and blog with Rust, actix-web, SvelteKit, Tailwind, and Flowbite — optimized to run on minimal hardware.",
+    highlights: [],
   },
 ];

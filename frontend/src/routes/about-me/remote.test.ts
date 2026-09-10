@@ -173,7 +173,7 @@ describe("toResumeContent", () => {
       }),
     );
 
-    expect(content?.personalProjects[0]).toEqual({ name: "Feed Bare Project" });
+    expect(content?.personalProjects[0]).toEqual({ name: "Feed Bare Project", highlights: [] });
     expect(content?.education[0]).toEqual({ institution: "Feed Bare School" });
   });
 
@@ -241,6 +241,88 @@ describe("toResumeContent", () => {
     const content = toResumeContent(feedWith((data) => (data.work[0].viaEmployer = null)));
 
     expect(content?.jobs[0].viaEmployer).toBeUndefined();
+  });
+
+  // fineTuningData (including logistics.travel) is excluded wholesale by the
+  // API's public projection and nothing here reads that key - but the fixture
+  // carries it anyway, so a regression in that redaction has something to be
+  // caught by rather than an accident of the fixture never exercising it.
+  it("never surfaces fineTuningData, even if the feed sent it", () => {
+    const content = toResumeContent(feedPayload());
+
+    expect(JSON.stringify(content)).not.toContain("Feed private travel note");
+  });
+
+  // Schema v3: projects[].highlights[] moved from string[] to the same
+  // object shape work[].highlights[] already uses. `id` is dropped - nothing
+  // on this page joins on it - and `specifics` is flattened from
+  // `{ detail }[]` to `string[]`, since nothing else about a project's
+  // specific justifies keeping that wrapper.
+  it("reads schema v3's object-shaped project highlights", () => {
+    const content = toResumeContent(feedPayload());
+
+    expect(content?.personalProjects[1]).toEqual({
+      name: "Feed Named Project",
+      link: "https://example.com/project",
+      description: "Feed named project description.",
+      highlights: [
+        {
+          summary: "Feed project highlight summary.",
+          specifics: ["Feed project highlight specific."],
+        },
+        { summary: "Feed project highlight without specifics.", specifics: [] },
+      ],
+    });
+  });
+
+  it("defaults a project's highlights to an empty array when the feed carries none", () => {
+    const content = toResumeContent(feedPayload());
+
+    expect(content?.personalProjects[0].highlights).toEqual([]);
+  });
+
+  // The schema v2 shape - a plain string per highlight - must keep reading
+  // correctly too: the feed carries no version field, so there is nothing to
+  // gate on, and the live feed serves v2 until the API's own migration has
+  // run. The string form can be dropped once that migration is confirmed in
+  // production (see readProjectHighlight in remote.ts).
+  it("reads schema v2's string-shaped project highlights the same way", () => {
+    const content = toResumeContent(
+      feedWith((data) => {
+        data.projects[1].highlights = ["A v2 string highlight."];
+      }),
+    );
+
+    expect(content?.personalProjects[1].highlights).toEqual([
+      { summary: "A v2 string highlight.", specifics: [] },
+    ]);
+  });
+
+  // A malformed highlight is optional supporting detail - losing the whole
+  // project, or the whole feed, over one bad bullet would be a far worse
+  // outcome than dropping just that bullet.
+  it("drops a malformed project highlight without losing the project or the feed", () => {
+    const content = toResumeContent(
+      feedWith((data) => {
+        data.projects[1].highlights = [
+          { id: "kept", summary: "A well-formed highlight.", specifics: [] },
+          { id: "dropped", summary: 42, specifics: [] },
+        ];
+      }),
+    );
+
+    expect(content?.personalProjects[1].highlights).toEqual([
+      { summary: "A well-formed highlight.", specifics: [] },
+    ]);
+    expect(console.warn).toHaveBeenCalled();
+    // The rest of the payload read cleanly too.
+    expect(content?.profile.name).toBe("Feed Profile Name");
+  });
+
+  it("rejects a project whose highlights field is the wrong shape entirely", () => {
+    expect(
+      toResumeContent(feedWith((data) => (data.projects[1].highlights = "not an array"))),
+    ).toBeNull();
   });
 });
 

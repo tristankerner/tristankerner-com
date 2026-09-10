@@ -49,6 +49,7 @@ import {
   type Location,
   type PersonalProject,
   type Profile,
+  type ProjectHighlight,
   type ResumeContent,
   type Role,
   type Skill,
@@ -187,6 +188,31 @@ function arrayOf<T>(item: Reader<T>): Reader<T[]> {
   return (value, field) => {
     if (!Array.isArray(value)) throw new InvalidFeed(`expected an array at ${field}`);
     return value.map((entry, i) => item(entry, `${field}[${i}]`));
+  };
+}
+
+/**
+ * Like `arrayOf`, but a malformed element is dropped rather than rejecting
+ * the whole array. Reserved for arrays of optional supporting detail - a
+ * project's `highlights`, so far - where losing an entire project (or the
+ * whole feed, since `projects[]` itself isn't sectioned) over one bad bullet
+ * would be a wildly disproportionate response. Still rejects outright if
+ * `value` itself isn't an array: that is the project's own field being the
+ * wrong shape, not one element of a right-shaped list.
+ */
+function arrayOfLenient<T>(item: Reader<T>): Reader<T[]> {
+  return (value, field) => {
+    if (!Array.isArray(value)) throw new InvalidFeed(`expected an array at ${field}`);
+    const out: T[] = [];
+    value.forEach((entry, i) => {
+      try {
+        out.push(item(entry, `${field}[${i}]`));
+      } catch (error) {
+        if (!(error instanceof InvalidFeed)) throw error;
+        console.warn(`Dropping a malformed entry: ${error.message}`);
+      }
+    });
+    return out;
   };
 }
 
@@ -369,18 +395,54 @@ const readEducation: Reader<Education> = (value, field) => {
   };
 };
 
+/**
+ * `projects[].highlights[]` entry -> this page's `ProjectHighlight`.
+ *
+ * Accepts either shape the feed may send during the schema v2 -> v3
+ * migration: a bare string (v2), or the object `work[].highlights[]` already
+ * uses (v3) - minus its `id`, which this type doesn't carry (see
+ * `ProjectHighlight` in ./content.ts). `readSpecific` is reused directly
+ * rather than re-declared, since a project highlight's specifics are read
+ * exactly like a job highlight's before the wrapper is stripped down to
+ * `detail`.
+ *
+ * The resume microservice's own document schema is migrating project
+ * highlights from plain strings to this object shape; as of 2026-09-09 that
+ * migration hasn't reached production yet, and the feed carries no version
+ * field to gate on, so both shapes have to keep reading correctly for the
+ * whole window between the two deploys. Drop the string branch once that
+ * migration is confirmed live and the feed no longer sends the old shape.
+ */
+const readProjectHighlight: Reader<ProjectHighlight> = (value, field) => {
+  if (typeof value === "string") return { summary: text(value, field), specifics: [] };
+  const raw = shape<{ summary: string; specifics: Specific[] }>({
+    summary: text,
+    specifics: arrayOf(readSpecific),
+  })(value, field);
+  return { summary: raw.summary, specifics: raw.specifics.map((specific) => specific.detail) };
+};
+
 /** `projects[]` entry -> this page's `PersonalProject`. */
 const readPersonalProject: Reader<PersonalProject> = (value, field) => {
   const raw = shape<{
     name: string | undefined;
     url: string | undefined;
     description: string | undefined;
+    highlights: ProjectHighlight[] | undefined;
   }>({
     name: optionalText,
     url: safeUrl,
     description: optionalText,
+    // Absent entirely on a v2 project, or one the feed hasn't populated yet -
+    // either way that means no highlights, not a rejection.
+    highlights: optionalOf(arrayOfLenient(readProjectHighlight)),
   })(value, field);
-  return { name: raw.name, link: raw.url, description: raw.description };
+  return {
+    name: raw.name,
+    link: raw.url,
+    description: raw.description,
+    highlights: raw.highlights ?? [],
+  };
 };
 
 /** A certificate entry -> this page's `Certification`: `identifier` is the id. */

@@ -47,7 +47,13 @@ describe("buildDocumentXml", () => {
         },
       ],
       education: [{ institution: "Sparse School" }],
-      personalProjects: [{ name: "Sparse Project" }, {}],
+      personalProjects: [
+        { name: "Sparse Project", highlights: [] },
+        { highlights: [] },
+        // No name and no description of its own - only its highlight gets a
+        // bullet, with nothing to nest under.
+        { highlights: [{ summary: "A highlight with no project name.", specifics: [] }] },
+      ],
     });
 
     expect(
@@ -55,6 +61,7 @@ describe("buildDocumentXml", () => {
     ).toBeNull();
     expect(xml).toContain("Fallback Position Title");
     expect(xml).toContain("A sparse highlight.");
+    expect(xml).toContain("A highlight with no project name.");
     expect(xml).not.toContain("undefined");
     expect(xml).not.toContain("·");
     expect(xml).not.toContain("()");
@@ -92,10 +99,17 @@ describe("buildDocumentXml", () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
-  it("emits one bullet paragraph per highlight plus personal project", () => {
+  it("emits one bullet paragraph per job highlight, personal project (that has a name or description), and project highlight", () => {
     const { xml } = buildDocumentXml(defaultContent);
     const totalHighlights = defaultContent.jobs.reduce((n, job) => n + job.highlights.length, 0);
-    const expectedBullets = totalHighlights + defaultContent.personalProjects.length;
+    const projectBullets = defaultContent.personalProjects.filter(
+      (project) => project.name || project.description,
+    ).length;
+    const projectHighlightBullets = defaultContent.personalProjects.reduce(
+      (n, project) => n + project.highlights.length,
+      0,
+    );
+    const expectedBullets = totalHighlights + projectBullets + projectHighlightBullets;
 
     const bulletParagraphs = xml.match(/<w:pStyle w:val="ListParagraph"\/>/g) ?? [];
     expect(bulletParagraphs).toHaveLength(expectedBullets);
@@ -139,6 +153,20 @@ describe("buildDocumentXml", () => {
 
     const named = feedContent.personalProjects.find((p) => p.name)!;
     expect(xml).toContain(`${named.name}: `);
+  });
+
+  it("nests a project highlight bullet under its project's bullet, and never emits its specifics", () => {
+    const { xml } = buildDocumentXml(feedContent);
+    const project = feedContent.personalProjects.find((p) => p.highlights.length > 0)!;
+    const [highlight] = project.highlights;
+
+    expect(xml).toContain(highlight.summary);
+    for (const specific of highlight.specifics) expect(xml).not.toContain(specific);
+
+    // The highlight's own bullet paragraph is indented further than the
+    // project's, so it reads as nested under it rather than as a sibling.
+    const highlightParagraph = xml.split("<w:p>").find((p) => p.includes(highlight.summary))!;
+    expect(highlightParagraph).toContain('w:ind w:start="1440"');
   });
 });
 

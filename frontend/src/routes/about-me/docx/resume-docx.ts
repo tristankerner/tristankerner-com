@@ -53,6 +53,12 @@ const SECTION_HEADINGS = {
   education: "Education",
 } as const;
 
+/**
+ * Twips. ListParagraph's own indent (styles.xml) is 720; a project highlight
+ * nests one further step past that, under the project's own bullet.
+ */
+const PROJECT_HIGHLIGHT_INDENT = 1440;
+
 function separator() {
   return run("  |  ", { color: COLOR.rule, size: SIZE.small });
 }
@@ -288,14 +294,33 @@ export function buildDocumentXml(content: ResumeContent): {
     if (project.description) {
       runs.push(run(project.description, { color: COLOR.body, size: SIZE.body }));
     }
-    // An entry with neither would be a bullet with nothing beside it.
-    if (runs.length === 0) continue;
-    paragraphs.push(
-      paragraph(
-        { style: "ListParagraph", numId: BULLET_NUM_ID, spacing: { after: 54, line: 238 } },
-        runs,
-      ),
-    );
+    // An entry with neither would be a bullet with nothing beside it - but its
+    // highlights, if any, still get theirs.
+    if (runs.length > 0) {
+      paragraphs.push(
+        paragraph(
+          { style: "ListParagraph", numId: BULLET_NUM_ID, spacing: { after: 54, line: 238 } },
+          runs,
+        ),
+      );
+    }
+
+    // Highlight bullets nest under the project's own - the same BULLET_NUM_ID
+    // every bullet on the page uses, indented one step past its own hanging
+    // indent. specifics is never emitted, matching job highlights above.
+    for (const highlight of project.highlights) {
+      paragraphs.push(
+        paragraph(
+          {
+            style: "ListParagraph",
+            numId: BULLET_NUM_ID,
+            indentStart: PROJECT_HIGHLIGHT_INDENT,
+            spacing: { after: 54, line: 238 },
+          },
+          [run(highlight.summary, { color: COLOR.body, size: SIZE.body })],
+        ),
+      );
+    }
   }
 
   // Education

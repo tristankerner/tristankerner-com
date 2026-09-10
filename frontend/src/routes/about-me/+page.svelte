@@ -242,6 +242,44 @@
                     {#if project.description}
                         <p class="text-gray-600 dark:text-gray-400">{project.description}</p>
                     {/if}
+                    {#if project.highlights.length > 0}
+                        <Accordion flush multiple class="contents">
+                            <!-- Same treatment as a job's highlights above: a project
+                                 accomplishment is the same kind of claim as a job one. -->
+                            <ul class="mt-2 space-y-1 text-gray-600 dark:text-gray-400">
+                                {#each project.highlights as highlight (highlight.summary)}
+                                    <li class="flex items-start gap-2">
+                                        <span class="mt-2 size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true"
+                                        ></span>
+                                        <div class="min-w-0 flex-1">
+                                            {#if highlight.specifics.length > 0}
+                                                <AccordionItem
+                                                    headingTag="div"
+                                                    class="contents"
+                                                    classes={{
+                                                        button:
+                                                            'border-b-0 p-0 text-left font-normal text-gray-600 dark:text-gray-400',
+                                                        content: 'border-b-0 p-0 pt-1.5',
+                                                    }}
+                                                >
+                                                    {#snippet header()}
+                                                        <span>{highlight.summary}</span>
+                                                    {/snippet}
+                                                    <ul class="ml-5 list-outside list-[circle] space-y-1 text-sm text-gray-500 dark:text-gray-500">
+                                                        {#each highlight.specifics as specific (specific)}
+                                                            <li>{specific}</li>
+                                                        {/each}
+                                                    </ul>
+                                                </AccordionItem>
+                                            {:else}
+                                                {highlight.summary}
+                                            {/if}
+                                        </div>
+                                    </li>
+                                {/each}
+                            </ul>
+                        </Accordion>
+                    {/if}
                 </li>
             {/each}
         </ul>

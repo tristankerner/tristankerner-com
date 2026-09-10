@@ -21,6 +21,13 @@ export function feedPayload(): Record<string, unknown> {
     public: true,
     created_at: "2026-08-26T21:50:42.899419",
     data: {
+      // Schema v3. Excluded wholesale by the API's public projection - this
+      // must never reach `toResumeContent`'s output. Present here so a
+      // regression in that redaction has something to be caught by; see the
+      // "never surfaces fineTuningData" case in remote.test.ts.
+      fineTuningData: {
+        logistics: { travel: "Feed private travel note that must never reach the page." },
+      },
       basics: {
         name: "Feed Profile Name",
         label: "Feed Profile Title",
@@ -87,11 +94,26 @@ export function feedPayload(): Record<string, unknown> {
         },
       ],
       projects: [
-        { name: null, url: null, description: "Feed unnamed project." },
+        { name: null, url: null, description: "Feed unnamed project.", highlights: [] },
         {
           name: "Feed Named Project",
           url: "https://example.com/project",
           description: "Feed named project description.",
+          // Schema v3: object-shaped, same `Highlight` shape as `work[].highlights[]`.
+          // One with specifics and one without, so a reader or a renderer that
+          // only ever sees one case isn't tested against the other.
+          highlights: [
+            {
+              id: "feed-project-highlight-detailed",
+              summary: "Feed project highlight summary.",
+              specifics: [{ detail: "Feed project highlight specific." }],
+            },
+            {
+              id: "feed-project-highlight-plain",
+              summary: "Feed project highlight without specifics.",
+              specifics: [],
+            },
+          ],
         },
       ],
     },

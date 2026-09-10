@@ -284,7 +284,26 @@ export type Education = {
   url?: string;
 };
 
-export type PersonalProject = { name?: string; link?: string; description?: string };
+/**
+ * One accomplishment behind a personal project - the same kind of claim as a
+ * job's `Highlight`, minus the join key: nothing on this page keys a
+ * project's private tailoring data off a stable id the way a job highlight's
+ * figures and tech lists are, so it isn't carried through (`Certification`
+ * drops its own such id-shaped field for the same reason).
+ *
+ * `specifics` is bare strings rather than `Specific[]`: once `tech` is
+ * stripped by the public projection, `Specific` is just `{ detail: string }`,
+ * and a project highlight has nothing else to justify keeping that wrapper.
+ */
+export type ProjectHighlight = { summary: string; specifics: string[] };
+
+export type PersonalProject = {
+  name?: string;
+  link?: string;
+  description?: string;
+  /** [] when the feed carries none - every consumer iterates unconditionally. */
+  highlights: ProjectHighlight[];
+};
 
 /** Every section of the resume, in one value. */
 export type ResumeContent = {
