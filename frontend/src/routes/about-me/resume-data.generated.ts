@@ -1055,6 +1055,7 @@ export const personalProjects: PersonalProject[] = [
     highlights: [],
   },
   {
+    name: "Unnamed Project",
     description:
       "Implemented a fault-tolerant, scalable integration system in Python as a proof of concept, using RabbitMQ, Redis, PostgreSQL, and FastAPI.",
     highlights: [],

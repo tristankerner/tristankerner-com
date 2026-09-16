@@ -13,6 +13,11 @@
     } from "./content";
     import { fetchResume, readCache } from "./remote";
     import DownloadResumeButton from "./docx/DownloadResumeButton.svelte";
+    import { SITE_NAME, SITE_URL } from "$lib/blog/config";
+
+    const title = `About Me | ${SITE_NAME}`;
+    const description = "Résumé and background: experience, skills, certifications, and personal projects.";
+    const canonical = `${SITE_URL}/about-me`;
 
     // Starts as the copy compiled into the build - which is exactly what the
     // prerendered HTML already contains, so the page is complete before any
@@ -50,6 +55,22 @@
         }
     });
 </script>
+
+<svelte:head>
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+</svelte:head>
 
 <div class="mx-auto max-w-5xl">
     <section

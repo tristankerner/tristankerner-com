@@ -24,7 +24,7 @@
 
 <div class="mx-auto flex max-w-3xl flex-col gap-6">
   {#each posts as post (post.date + "/" + post.slug)}
-    <Card size="xl" href={`/blog/${post.date}/${post.slug}`} class="hover:shadow-lg">
+    <Card size="xl" href={`/blog/${post.date}/${post.slug}`} class="hover:shadow-lg p-4">
       <h2 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
         {post.metadata.title}
       </h2>

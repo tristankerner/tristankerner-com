@@ -2,6 +2,11 @@
     import { Badge, Timeline, TimelineItem } from "flowbite-svelte";
     import MemoryCarousel from "$lib/memory-lane/MemoryCarousel.svelte";
     import { memories } from "./content";
+    import { SITE_NAME, SITE_URL } from "$lib/blog/config";
+
+    const title = `Memory Ln | ${SITE_NAME}`;
+    const description = "A running scrapbook of milestones, roughly in order.";
+    const canonical = `${SITE_URL}/memory-lane`;
 
     function formatYear(date: string): string {
         return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -10,6 +15,22 @@
         });
     }
 </script>
+
+<svelte:head>
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+</svelte:head>
 
 <div class="mx-auto max-w-3xl">
     <h1 class="mb-2 text-center text-3xl font-bold dark:text-white">Memory Ln</h1>

@@ -52,7 +52,7 @@
                 <span>{profile.tagline}</span>
             </p>
             <p class="mt-4 text-gray-600 dark:text-gray-400">
-                Welcome — this is where I write about the software I build and the problems I run into along the way.
+                Welcome - this is where I write about the software I build, the endeavors I undertake, and occasionally the oddities of life.
             </p>
             <div class="mt-6 flex flex-wrap justify-center gap-3 sm:justify-start">
                 <Button href="/about-me" color="primary">About Me</Button>
@@ -72,7 +72,7 @@
         </div>
         <div class="grid gap-6 md:grid-cols-3">
             {#each data.recentPosts as post (post.date + "/" + post.slug)}
-                <Card size="xl" href={`/blog/${post.date}/${post.slug}`} class="hover:shadow-lg">
+                <Card size="xl" href={`/blog/${post.date}/${post.slug}`} class="hover:shadow-lg p-4">
                     <h3 class="text-lg font-bold tracking-tight text-gray-900 dark:text-white">
                         {post.metadata.title}
                     </h3>
