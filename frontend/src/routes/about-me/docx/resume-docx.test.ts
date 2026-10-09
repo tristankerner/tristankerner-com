@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { CONTACT_EMAIL } from "$lib/contact";
 import { defaultContent } from "../content";
 import { toResumeContent } from "../remote";
 import { feedPayload } from "../feed.fixture";
-import { buildDocumentXml, buildResumeDocx, RESUME_EMAIL, resumeFileName } from "./resume-docx";
+import { buildDocumentXml, buildResumeDocx, resumeFileName } from "./resume-docx";
 
 const feedContent = toResumeContent(feedPayload());
 if (!feedContent) throw new Error("feedPayload() failed to normalize");
@@ -67,19 +68,19 @@ describe("buildDocumentXml", () => {
     expect(xml).not.toContain("()");
   });
 
-  it("prints RESUME_EMAIL once as text and once as a mailto: relationship target, and no phone number", () => {
+  it("prints CONTACT_EMAIL once as text and once as a mailto: relationship target, and no phone number", () => {
     const { xml, relationships } = buildDocumentXml(defaultContent);
 
-    const textOccurrences = xml.split(RESUME_EMAIL).length - 1;
+    const textOccurrences = xml.split(CONTACT_EMAIL).length - 1;
     expect(textOccurrences).toBe(1);
 
-    const mailtoRels = relationships.filter((r) => r.target === `mailto:${RESUME_EMAIL}`);
+    const mailtoRels = relationships.filter((r) => r.target === `mailto:${CONTACT_EMAIL}`);
     expect(mailtoRels).toHaveLength(1);
 
     expect(xml).not.toMatch(/\d{3}-\d{3}-\d{4}/);
     // No other email address anywhere in the document.
     const emailMatches = xml.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? [];
-    expect(emailMatches).toEqual([RESUME_EMAIL]);
+    expect(emailMatches).toEqual([CONTACT_EMAIL]);
   });
 
   it("prints the chosen residence location and not the other header candidates", () => {

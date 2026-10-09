@@ -1,7 +1,9 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { Accordion, AccordionItem, Badge, Spinner, Timeline, TimelineItem } from "flowbite-svelte";
+    import { Accordion, AccordionItem, Badge, Button, Spinner, Timeline, TimelineItem } from "flowbite-svelte";
+    import { EnvelopeOutline } from "flowbite-svelte-icons";
     import profilePhoto from "$lib/assets/profile-photo.jpg";
+    import { CONTACT_EMAIL } from "$lib/contact";
     import {
         companyContextText,
         currentRoleText,
@@ -102,7 +104,13 @@
                 </p>
             {/if}
         </div>
-        <DownloadResumeButton {content} />
+        <div class="flex flex-col items-center gap-2 sm:ml-auto sm:items-end">
+            <Button href="mailto:{CONTACT_EMAIL}" color="alternative">
+                <EnvelopeOutline size="sm" class="me-2" aria-hidden="true" />
+                Contact
+            </Button>
+            <DownloadResumeButton {content} />
+        </div>
     </section>
 
     <div class="grid gap-10 md:grid-cols-3">

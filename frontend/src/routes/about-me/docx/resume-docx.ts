@@ -6,6 +6,7 @@
  * (no phone number, a different email, two extra jobs, and so on) are listed
  * in the PR description rather than in code.
  */
+import { CONTACT_EMAIL } from "$lib/contact";
 import {
   currentRoleText,
   currentTitleText,
@@ -32,17 +33,6 @@ import {
   tab,
 } from "./ooxml";
 import { zip, type ZipEntry } from "./zip";
-
-/**
- * The contact address printed in a generated résumé.
- *
- * Deliberately not in the resume feed: that feed is public and
- * unauthenticated, and a machine-readable address at a predictable URL is a
- * scraping target (see the `Contact` type in ./content.ts). This is a
- * disposable alias, so shipping it in the client bundle is an accepted cost -
- * replace it here when it burns out.
- */
-export const RESUME_EMAIL = "tk.pub.resume.passerby769@passinbox.com";
 
 const SECTION_HEADINGS = {
   summary: "Summary",
@@ -151,10 +141,10 @@ export function buildDocumentXml(content: ResumeContent): {
   );
 
   // 3. Contact line
-  const emailRelId = addHyperlink(`mailto:${RESUME_EMAIL}`);
+  const emailRelId = addHyperlink(`mailto:${CONTACT_EMAIL}`);
   const emailRun = hyperlink(
     emailRelId,
-    run(RESUME_EMAIL, { color: COLOR.heading, size: SIZE.small, underline: true }),
+    run(CONTACT_EMAIL, { color: COLOR.heading, size: SIZE.small, underline: true }),
   );
   const contactRuns = residence
     ? [

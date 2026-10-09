@@ -13,7 +13,8 @@
     import ConsentBanner from "$lib/consent/ConsentBanner.svelte";
     import { GTAG_BOOTSTRAP_SCRIPT, GTAG_SCRIPT_SRC } from "../lib/consent/gtagBootstrap.ts";
     import { Navbar, NavBrand, NavLi, NavUl, NavHamburger,  DarkMode, Footer, FooterCopyright, FooterLinkGroup, FooterLink } from "flowbite-svelte";
-    import { LinkedinSolid,  GithubSolid } from "flowbite-svelte-icons";
+    import { LinkedinSolid,  GithubSolid, EnvelopeSolid } from "flowbite-svelte-icons";
+    import { CONTACT_EMAIL } from "$lib/contact";
 
     let { children } = $props();
     let activeUrl = $derived(page.url.pathname);
@@ -79,6 +80,7 @@
             <NavLi href="https://www.linkedin.com/in/tristan-kerner-754343135" target="_blank">LinkedIn</NavLi>
             <NavLi href="https://github.com/tristankerner" target="_blank">GitHub</NavLi>
             <NavLi href="/about-me">About</NavLi>
+            <NavLi href="mailto:{CONTACT_EMAIL}">Contact</NavLi>
         </NavUl>
     </Navbar>
 </div>
@@ -94,6 +96,7 @@
     <FooterLinkGroup class="mt-3 flex flex-wrap items-center text-sm text-gray-500 sm:mt-0 dark:text-gray-400">
         <FooterLink href="https://www.linkedin.com/in/tristan-kerner-754343135" aria-label="LinkedIn"><LinkedinSolid size="lg"/></FooterLink>
         <FooterLink href="https://github.com/tristankerner" aria-label="GitHub"><GithubSolid size="lg"/></FooterLink>
+        <FooterLink href="mailto:{CONTACT_EMAIL}" aria-label="Email"><EnvelopeSolid size="lg"/></FooterLink>
         <li class="me-4 last:me-0 md:me-6">
             <button type="button" class="hover:underline" onclick={() => consentBanner?.openPreferences()}>
                 Cookie settings
